@@ -15,6 +15,8 @@ namespace Squidex.Areas.IdentityServer.Controllers.Account
 
         public bool IsLogin { get; set; }
 
+        public bool AllowRegister { get; set; }
+
         public bool IsFailed { get; set; }
 
         public bool HasPasswordAuth { get; set; }

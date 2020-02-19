@@ -53,6 +53,8 @@ namespace Squidex.Config
 
         public bool AdminRecreate { get; set; }
 
+        public bool AllowRegister { get; set; }
+
         public bool AllowPasswordAuth { get; set; }
 
         public bool LockAutomatically { get; set; }
