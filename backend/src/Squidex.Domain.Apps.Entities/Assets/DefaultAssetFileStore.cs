@@ -9,6 +9,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Squidex.Infrastructure;
 using Squidex.Infrastructure.Assets;
 
 namespace Squidex.Domain.Apps.Entities.Assets
@@ -27,6 +28,13 @@ namespace Squidex.Domain.Apps.Entities.Assets
             var fileName = GetFileName(id, fileVersion);
 
             return assetStore.GeneratePublicUrl(fileName);
+        }
+
+        public Task<long> GetFileSizeAsync(Guid id, long fileVersion, CancellationToken ct = default)
+        {
+            var fileName = GetFileName(id, fileVersion);
+
+            return assetStore.GetSizeAsync(fileName, ct);
         }
 
         public Task UploadAsync(Guid id, long fileVersion, Stream stream, CancellationToken ct = default)
@@ -48,11 +56,11 @@ namespace Squidex.Domain.Apps.Entities.Assets
             return assetStore.CopyAsync(tempFile, fileName, ct);
         }
 
-        public Task DownloadAsync(Guid id, long fileVersion, Stream stream, CancellationToken ct = default)
+        public Task DownloadAsync(Guid id, long fileVersion, Stream stream, BytesRange range = default, CancellationToken ct = default)
         {
             var fileName = GetFileName(id, fileVersion);
 
-            return assetStore.DownloadAsync(fileName, stream, ct);
+            return assetStore.DownloadAsync(fileName, stream, range, ct);
         }
 
         public Task DeleteAsync(Guid id, long fileVersion)

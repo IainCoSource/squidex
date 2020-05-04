@@ -6,16 +6,7 @@
  */
 
 import { ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
-
-import {
-    AccessTokenDto,
-    ApiUrlConfig,
-    AppsState,
-    ClientDto,
-    ClientsService,
-    DialogService,
-    RoleDto
-} from '@app/shared';
+import { AccessTokenDto, ApiUrlConfig, AppsState, ClientDto, ClientsService, DialogService, RoleDto } from '@app/shared';
 
 @Component({
     selector: 'sqx-client-connect-form',
@@ -83,7 +74,7 @@ function connectHttpText(apiUrl: ApiUrlConfig, app: string, client: { id: string
     -d 'grant_type=client_credentials&
         client_id=${app}:${client.id}&
         client_secret=${client.secret}&
-        scope=squidex-api`;
+        scope=squidex-api'`;
 }
 
 function connectLibrary(apiUrl: ApiUrlConfig, app: string, client: { id: string, secret: string }) {

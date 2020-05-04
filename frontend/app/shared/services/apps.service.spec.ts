@@ -7,18 +7,7 @@
 
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { inject, TestBed } from '@angular/core/testing';
-
-import {
-    AnalyticsService,
-    ApiUrlConfig,
-    AppDto,
-    AppsService,
-    DateTime,
-    ErrorDto,
-    Resource,
-    ResourceLinks,
-    Version
-} from '@app/shared/internal';
+import { AnalyticsService, ApiUrlConfig, AppDto, AppsService, DateTime, ErrorDto, Resource, ResourceLinks, Version } from '@app/shared/internal';
 
 describe('AppsService', () => {
     const version = new Version('1');
@@ -232,8 +221,8 @@ describe('AppsService', () => {
             label: `my-label${id}${suffix}`,
             description: `my-description${id}${suffix}`,
             permissions: ['Owner'],
-            created: `${id % 1000 + 2000}-12-12T10:10:00`,
-            lastModified: `${id % 1000 + 2000}-11-11T10:10:00`,
+            created: `${id % 1000 + 2000}-12-12T10:10:00Z`,
+            lastModified: `${id % 1000 + 2000}-11-11T10:10:00Z`,
             canAccessApi: id % 2 === 0,
             canAccessContent: id % 2 === 0,
             planName: 'Free',
@@ -257,8 +246,8 @@ export function createApp(id: number, suffix = '') {
         `my-label${id}${suffix}`,
         `my-description${id}${suffix}`,
         ['Owner'],
-        DateTime.parseISO_UTC(`${id % 1000 + 2000}-12-12T10:10:00`),
-        DateTime.parseISO_UTC(`${id % 1000 + 2000}-11-11T10:10:00`),
+        DateTime.parseISO(`${id % 1000 + 2000}-12-12T10:10:00Z`),
+        DateTime.parseISO(`${id % 1000 + 2000}-11-11T10:10:00Z`),
         id % 2 === 0,
         id % 2 === 0,
         'Free', 'Basic',

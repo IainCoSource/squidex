@@ -5,29 +5,10 @@
  * Copyright (c) Squidex UG (haftungsbeschränkt). All rights reserved.
  */
 
+// tslint:disable: max-line-length
+
 import { AbstractControl, FormArray } from '@angular/forms';
-
-import {
-    AppLanguageDto,
-    createProperties,
-    DateTime,
-    EditContentForm,
-    FieldDefaultValue,
-    FieldFormatter,
-    FieldPropertiesDto,
-    FieldsValidators,
-    getContentValue,
-    HtmlValue,
-    LanguageDto,
-    MetaFields,
-    NestedFieldDto,
-    PartitionConfig,
-    RootFieldDto,
-    SchemaDetailsDto,
-    SchemaPropertiesDto,
-    Version
-} from '@app/shared/internal';
-
+import { AppLanguageDto, createProperties, DateTime, EditContentForm, FieldDefaultValue, FieldFormatter, FieldPropertiesDto, FieldsValidators, getContentValue, HtmlValue, LanguageDto, MetaFields, NestedFieldDto, PartitionConfig, RootFieldDto, SchemaDetailsDto, SchemaPropertiesDto, Version } from '@app/shared/internal';
 import { TestValues } from './_test-helpers';
 
 const {
@@ -152,8 +133,12 @@ describe('ArrayField', () => {
         expect(FieldFormatter.format(field, null)).toBe('');
     });
 
-    it('should format to asset count', () => {
-        expect(FieldFormatter.format(field, [1, 2, 3])).toBe('3 Item(s)');
+    it('should format to plural count for many items', () => {
+        expect(FieldFormatter.format(field, [1, 2, 3])).toBe('3 Items');
+    });
+
+    it('should format to plural count for single item', () => {
+        expect(FieldFormatter.format(field, [1])).toBe('1 Item');
     });
 
     it('should return zero formatting if other type', () => {
@@ -176,8 +161,12 @@ describe('AssetsField', () => {
         expect(FieldFormatter.format(field, null)).toBe('');
     });
 
-    it('should format to asset count', () => {
-        expect(FieldFormatter.format(field, [1, 2, 3])).toBe('3 Asset(s)');
+    it('should format to plural count for many items', () => {
+        expect(FieldFormatter.format(field, [1, 2, 3])).toBe('3 Assets');
+    });
+
+    it('should format to plural count for single item', () => {
+        expect(FieldFormatter.format(field, [1])).toBe('1 Asset');
     });
 
     it('should return zero formatting if other type', () => {
@@ -240,7 +229,7 @@ describe('BooleanField', () => {
 });
 
 describe('DateTimeField', () => {
-    const now = DateTime.parseISO_UTC('2017-10-12T16:30:10Z');
+    const now = DateTime.parseISO('2017-10-12T16:30:10Z');
     const field = createField({ properties: createProperties('DateTime', { editor: 'DateTime', isRequired: true }) });
 
     it('should create validators', () => {
@@ -253,6 +242,12 @@ describe('DateTimeField', () => {
 
     it('should format to input if parsing failed', () => {
         expect(FieldFormatter.format(field, true)).toBe(true);
+    });
+
+    it('should format old format to date', () => {
+        const dateField = createField({ properties: createProperties('DateTime', { editor: 'Date' }) });
+
+        expect(FieldFormatter.format(dateField, '2017-12-12')).toBe('2017-12-12');
     });
 
     it('should format to date', () => {
@@ -389,8 +384,12 @@ describe('ReferencesField', () => {
         expect(FieldFormatter.format(field, null)).toBe('');
     });
 
-    it('should format to asset count', () => {
-        expect(FieldFormatter.format(field, [1, 2, 3])).toBe('3 Reference(s)');
+    it('should format to plural count for many items', () => {
+        expect(FieldFormatter.format(field, [1, 2, 3])).toBe('3 References');
+    });
+
+    it('should format to plural count for single item', () => {
+        expect(FieldFormatter.format(field, [1])).toBe('1 Reference');
     });
 
     it('should return zero formatting if other type', () => {
@@ -448,18 +447,32 @@ describe('GetContentValue', () => {
     const fieldLocalized = createField({ properties: createProperties('Number') });
     const fieldAssets = createField({ properties: createProperties('Assets') });
 
-    it('should resolve image url field from references value', () => {
+    it('should resolve image url and filename from referenced asset', () => {
         const content: any = {
             referenceData: {
                 field1: {
-                    en: '13'
+                    en: ['url/to/13', 'file13']
                 }
             }
         };
 
         const result = getContentValue(content, language, fieldAssets);
 
-        expect(result).toEqual({ value: '13', formatted: new HtmlValue('<img src="13?width=50&height=50" />') });
+        expect(result).toEqual({ value: ['url/to/13', 'file13'], formatted: new HtmlValue('<img src="url/to/13?width=50&height=50" /> file13') });
+    });
+
+    it('should resolve filename from referenced asset', () => {
+        const content: any = {
+            referenceData: {
+                field1: {
+                    en: ['file13']
+                }
+            }
+        };
+
+        const result = getContentValue(content, language, fieldAssets);
+
+        expect(result).toEqual({ value: ['file13'], formatted: 'file13' });
     });
 
     it('should not image url if not found', () => {
@@ -540,7 +553,7 @@ describe('GetContentValue', () => {
 
     it('should resolve invariant field', () => {
         const content: any = {
-            dataDraft: {
+            data: {
                 field1: {
                     iv: 13
                 }
@@ -554,7 +567,7 @@ describe('GetContentValue', () => {
 
     it('should resolve localized field', () => {
         const content: any = {
-            dataDraft: {
+            data: {
                 field1: {
                     en: 13
                 }
@@ -568,7 +581,7 @@ describe('GetContentValue', () => {
 
     it('should return default values if field not found', () => {
         const content: any = {
-            dataDraft: {
+            data: {
                 other: {
                     en: 13
                 }

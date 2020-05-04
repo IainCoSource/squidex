@@ -5,19 +5,12 @@
  * Copyright (c) Squidex UG (haftungsbeschränkt). All rights reserved.
  */
 
-// tslint:disable:template-use-track-by-function
+// tslint:disable: template-use-track-by-function
 
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, forwardRef, Input, OnChanges, OnInit, SimpleChanges, ViewChild } from '@angular/core';
 import { FormControl, NG_VALUE_ACCESSOR } from '@angular/forms';
+import { fadeAnimation, Keys, ModalModel, StatefulControlComponent, Types } from '@app/framework/internal';
 import { distinctUntilChanged, map, tap } from 'rxjs/operators';
-
-import {
-    fadeAnimation,
-    Keys,
-    ModalModel,
-    StatefulControlComponent,
-    Types
-} from '@app/framework/internal';
 
 export const CONVERSION_FAILED = {};
 
@@ -251,8 +244,13 @@ export class TagEditorComponent extends StatefulControlComponent<State, Readonly
                     tap(() => {
                         this.resetSize();
                     }),
-                    map(query => <string>query),
-                    map(query => query ? query.trim().toLowerCase() : query),
+                    map(query => {
+                        if (Types.isString(query)) {
+                            return query.trim().toLowerCase();
+                        } else {
+                            return '';
+                        }
+                    }),
                     tap(query => {
                         if (!query) {
                             this.resetAutocompletion();
@@ -260,7 +258,9 @@ export class TagEditorComponent extends StatefulControlComponent<State, Readonly
                     }),
                     distinctUntilChanged(),
                     map(query => {
-                        if (Types.isArray(this.suggestionsSorted) && query && query.length > 0) {
+                        if (!query) {
+                            return [];
+                        } else if (Types.isArray(this.suggestionsSorted)) {
                             return this.suggestionsSorted.filter(s => s.lowerCaseName.indexOf(query) >= 0 && !this.snapshot.items.find(x => x.id === s.id));
                         } else {
                             return [];
@@ -326,7 +326,7 @@ export class TagEditorComponent extends StatefulControlComponent<State, Readonly
     }
 
     public remove(index: number) {
-        this.updateItems(this.snapshot.items.filter((_, i) => i !== index));
+        this.updateItems(this.snapshot.items.filter((_, i) => i !== index), true);
     }
 
     public resetSize() {
@@ -396,7 +396,7 @@ export class TagEditorComponent extends StatefulControlComponent<State, Readonly
             const value = <string>this.addInput.value;
 
             if (!value || value.length === 0) {
-                this.updateItems(this.snapshot.items.slice(0, this.snapshot.items.length - 1));
+                this.updateItems(this.snapshot.items.slice(0, this.snapshot.items.length - 1), false);
 
                 return false;
             }
@@ -436,7 +436,7 @@ export class TagEditorComponent extends StatefulControlComponent<State, Readonly
 
         if (tagValue) {
             if (this.allowDuplicates || !this.isSelected(tagValue)) {
-                this.updateItems([...this.snapshot.items, tagValue]);
+                this.updateItems([...this.snapshot.items, tagValue], true);
             }
 
             this.resetForm();
@@ -449,9 +449,9 @@ export class TagEditorComponent extends StatefulControlComponent<State, Readonly
 
     public toggleValue(isSelected: boolean, tagValue: TagValue) {
         if (isSelected) {
-            this.updateItems([...this.snapshot.items, tagValue]);
+            this.updateItems([...this.snapshot.items, tagValue], true);
         } else {
-            this.updateItems(this.snapshot.items.filter(x => x.id !== tagValue.id));
+            this.updateItems(this.snapshot.items.filter(x => x.id !== tagValue.id), true);
         }
     }
 
@@ -495,7 +495,7 @@ export class TagEditorComponent extends StatefulControlComponent<State, Readonly
         if (!this.hasSelection()) {
             this.onCopy(event);
 
-            this.updateItems([]);
+            this.updateItems([], false);
         }
     }
 
@@ -526,7 +526,7 @@ export class TagEditorComponent extends StatefulControlComponent<State, Readonly
                     }
                 }
 
-                this.updateItems(values);
+                this.updateItems(values, false);
             }
 
             event.preventDefault();
@@ -540,13 +540,17 @@ export class TagEditorComponent extends StatefulControlComponent<State, Readonly
         return s && e && (e - s) > 0;
     }
 
-    private updateItems(items: ReadonlyArray<TagValue>) {
+    private updateItems(items: ReadonlyArray<TagValue>, touched: boolean) {
         this.next(s => ({ ...s, items }));
 
         if (items.length === 0 && this.undefinedWhenEmpty) {
             this.callChange(undefined);
         } else {
             this.callChange(items.map(x => x.value));
+        }
+
+        if (touched) {
+            this.callTouched();
         }
 
         this.resetSize();

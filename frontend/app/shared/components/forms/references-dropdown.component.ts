@@ -7,18 +7,7 @@
 
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, forwardRef, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { FormControl, NG_VALUE_ACCESSOR } from '@angular/forms';
-
-import {
-    AppsState,
-    ContentDto,
-    ContentsService,
-    getContentValue,
-    LanguageDto,
-    StatefulControlComponent,
-    Types,
-    UIOptions,
-    value$
-} from '@app/shared/internal';
+import { AppsState, ContentDto, ContentsService, getContentValue, LanguageDto, StatefulControlComponent, Types, UIOptions, value$ } from '@app/shared/internal';
 
 export const SQX_REFERENCES_DROPDOWN_CONTROL_VALUE_ACCESSOR: any = {
     provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => ReferencesDropdownComponent), multi: true
@@ -86,22 +75,22 @@ export class ReferencesDropdownComponent extends StatefulControlComponent<State,
         this.own(
             value$(this.selectionControl)
                 .subscribe((value: ContentName) => {
-                    if (value && value.id) {
-                        this.callTouched();
-
-                        if (this.mode === 'Single') {
-                            this.callChange(value.id);
+                    if (this.selectionControl.enabled) {
+                        if (value && value.id) {
+                            if (this.mode === 'Single') {
+                                this.callChange(value.id);
+                            } else {
+                                this.callChange([value.id]);
+                            }
                         } else {
-                            this.callChange([value.id]);
+                            if (this.mode === 'Single') {
+                                this.callChange(null);
+                            } else {
+                                this.callChange([]);
+                            }
                         }
-                    } else {
-                        this.callTouched();
 
-                        if (this.mode === 'Single') {
-                            this.callChange(null);
-                        } else {
-                            this.callChange([]);
-                        }
+                        this.callTouched();
                     }
                 }));
     }
@@ -111,7 +100,7 @@ export class ReferencesDropdownComponent extends StatefulControlComponent<State,
             this.resetState();
 
             if (this.isValid) {
-                this.contentsService.getContents(this.appsState.appName, this.schemaId, this.itemCount, 0)
+                this.contentsService.getContents(this.appsState.appName, this.schemaId, { take: this.itemCount })
                     .subscribe(contents => {
                         const contentItems = contents.items;
                         const contentNames = this.createContentNames(contentItems);

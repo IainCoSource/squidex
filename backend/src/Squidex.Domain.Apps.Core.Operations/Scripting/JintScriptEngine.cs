@@ -7,90 +7,92 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Esprima;
 using Jint;
 using Jint.Native;
-using Jint.Native.Date;
-using Jint.Native.Object;
 using Jint.Runtime;
-using Jint.Runtime.Interop;
+using Microsoft.Extensions.Caching.Memory;
 using Squidex.Domain.Apps.Core.Contents;
 using Squidex.Domain.Apps.Core.Scripting.ContentWrapper;
+using Squidex.Domain.Apps.Core.Scripting.Internal;
 using Squidex.Infrastructure;
+using Squidex.Infrastructure.Json.Objects;
 using Squidex.Infrastructure.Validation;
 
 namespace Squidex.Domain.Apps.Core.Scripting
 {
     public sealed class JintScriptEngine : IScriptEngine
     {
+        private readonly IScriptExtension[] extensions;
+        private readonly Parser parser;
+
         public TimeSpan Timeout { get; set; } = TimeSpan.FromMilliseconds(200);
 
-        public void Execute(ScriptContext context, string script)
+        public TimeSpan ExecutionTimeout { get; set; } = TimeSpan.FromMilliseconds(4000);
+
+        public JintScriptEngine(IMemoryCache memoryCache, IEnumerable<IScriptExtension>? extensions = null)
+        {
+            parser = new Parser(memoryCache);
+
+            this.extensions = extensions?.ToArray() ?? Array.Empty<IScriptExtension>();
+        }
+
+        public async Task ExecuteAsync(ScriptContext context, string script)
         {
             Guard.NotNull(context);
+            Guard.NotNullOrEmpty(script);
 
-            if (!string.IsNullOrWhiteSpace(script))
+            using (var cts = new CancellationTokenSource(ExecutionTimeout))
             {
-                var engine = CreateScriptEngine(context);
+                var tcs = new TaskCompletionSource<bool>();
 
-                EnableDisallow(engine);
-                EnableReject(engine);
+                using (cts.Token.Register(() => tcs.TrySetCanceled()))
+                {
+                    var engine =
+                        CreateEngine(context, true, cts.Token, tcs.TrySetException, true)
+                            .AddDisallow()
+                            .AddReject();
 
-                Execute(engine, script);
+                    engine.SetValue("complete", new Action<JsValue?>(value =>
+                    {
+                        tcs.TrySetResult(true);
+                    }));
+
+                    Execute(engine, script);
+
+                    if (engine.GetValue("async") != true)
+                    {
+                        tcs.TrySetResult(true);
+                    }
+
+                    await tcs.Task;
+                }
             }
         }
 
-        public NamedContentData ExecuteAndTransform(ScriptContext context, string script)
+        public async Task<NamedContentData> ExecuteAndTransformAsync(ScriptContext context, string script)
         {
             Guard.NotNull(context);
+            Guard.NotNullOrEmpty(script);
 
-            var result = context.Data!;
-
-            if (!string.IsNullOrWhiteSpace(script))
+            using (var cts = new CancellationTokenSource(ExecutionTimeout))
             {
-                var engine = CreateScriptEngine(context);
+                var tcs = new TaskCompletionSource<NamedContentData>();
 
-                EnableDisallow(engine);
-                EnableReject(engine);
-
-                engine.SetValue("operation", new Action(() =>
+                using (cts.Token.Register(() => tcs.TrySetCanceled()))
                 {
-                    var dataInstance = engine.GetValue("ctx").AsObject().Get("data");
+                    var engine =
+                        CreateEngine(context, true, cts.Token, tcs.TrySetException, true)
+                            .AddDisallow()
+                            .AddReject();
 
-                    if (dataInstance != null && dataInstance.IsObject() && dataInstance.AsObject() is ContentDataObject data)
+                    engine.SetValue("complete", new Action<JsValue?>(value =>
                     {
-                        data.TryUpdate(out result);
-                    }
-                }));
-
-                engine.SetValue("replace", new Action(() =>
-                {
-                    var dataInstance = engine.GetValue("ctx").AsObject().Get("data");
-
-                    if (dataInstance != null && dataInstance.IsObject() && dataInstance.AsObject() is ContentDataObject data)
-                    {
-                        data.TryUpdate(out result);
-                    }
-                }));
-
-                Execute(engine, script);
-            }
-
-            return result;
-        }
-
-        public NamedContentData Transform(ScriptContext context, string script)
-        {
-            Guard.NotNull(context);
-
-            var result = context.Data!;
-
-            if (!string.IsNullOrWhiteSpace(script))
-            {
-                try
-                {
-                    var engine = CreateScriptEngine(context);
+                        tcs.TrySetResult(context.Data!);
+                    }));
 
                     engine.SetValue("replace", new Action(() =>
                     {
@@ -98,26 +100,196 @@ namespace Squidex.Domain.Apps.Core.Scripting
 
                         if (dataInstance != null && dataInstance.IsObject() && dataInstance.AsObject() is ContentDataObject data)
                         {
-                            data.TryUpdate(out result);
+                            if (!tcs.Task.IsCompleted)
+                            {
+                                if (data.TryUpdate(out var modified))
+                                {
+                                    tcs.TrySetResult(modified);
+                                }
+                                else
+                                {
+                                    tcs.TrySetResult(context.Data!);
+                                }
+                            }
                         }
                     }));
 
-                    engine.Execute(script);
-                }
-                catch (Exception)
-                {
-                    result = context.Data!;
+                    Execute(engine, script);
+
+                    if (engine.GetValue("async") != true)
+                    {
+                        tcs.TrySetResult(context.Data!);
+                    }
+
+                    return await tcs.Task;
                 }
             }
-
-            return result;
         }
 
-        private static void Execute(Engine engine, string script)
+        public async Task<NamedContentData> TransformAsync(ScriptContext context, string script)
+        {
+            Guard.NotNull(context);
+            Guard.NotNullOrEmpty(script);
+
+            using (var cts = new CancellationTokenSource(ExecutionTimeout))
+            {
+                var tcs = new TaskCompletionSource<NamedContentData>();
+
+                using (cts.Token.Register(() => tcs.TrySetCanceled()))
+                {
+                    var engine = CreateEngine(context, true, cts.Token, tcs.TrySetException, true);
+
+                    engine.SetValue("complete", new Action<JsValue?>(value =>
+                    {
+                        tcs.TrySetResult(context.Data!);
+                    }));
+
+                    engine.SetValue("replace", new Action(() =>
+                    {
+                        var dataInstance = engine.GetValue("ctx").AsObject().Get("data");
+
+                        if (dataInstance != null && dataInstance.IsObject() && dataInstance.AsObject() is ContentDataObject data)
+                        {
+                            if (!tcs.Task.IsCompleted)
+                            {
+                                if (data.TryUpdate(out var modified))
+                                {
+                                    tcs.TrySetResult(modified);
+                                }
+                                else
+                                {
+                                    tcs.TrySetResult(context.Data!);
+                                }
+                            }
+                        }
+                    }));
+
+                    Execute(engine, script);
+
+                    if (engine.GetValue("async") != true)
+                    {
+                        tcs.TrySetResult(context.Data!);
+                    }
+
+                    return await tcs.Task;
+                }
+            }
+        }
+
+        public bool Evaluate(ScriptContext context, string script)
+        {
+            Guard.NotNull(context);
+            Guard.NotNullOrEmpty(script);
+
+            try
+            {
+                var engine = CreateEngine(context, false);
+
+                Execute(engine, script);
+
+                var converted = Equals(engine.GetCompletionValue().ToObject(), true);
+
+                return converted;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public string? Interpolate(ScriptContext context, string script)
+        {
+            Guard.NotNull(context);
+            Guard.NotNullOrEmpty(script);
+
+            try
+            {
+                var engine = CreateEngine(context, false);
+
+                Execute(engine, script);
+
+                var converted = engine.GetCompletionValue().ToObject()?.ToString() ?? "null";
+
+                return converted == "undefined" ? "null" : converted;
+            }
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
+        }
+
+        public Task<IJsonValue> GetAsync(ScriptContext context, string script)
+        {
+            Guard.NotNull(context);
+            Guard.NotNullOrEmpty(script);
+
+            using (var cts = new CancellationTokenSource(ExecutionTimeout))
+            {
+                var tcs = new TaskCompletionSource<IJsonValue>();
+
+                using (cts.Token.Register(() =>
+                {
+                    tcs.TrySetCanceled();
+                }))
+                {
+                    var engine = CreateEngine(context, true, cts.Token, ex => tcs.TrySetException(ex), true);
+
+                    engine.SetValue("complete", new Action<JsValue?>(value =>
+                    {
+                        tcs.TrySetResult(JsonMapper.Map(value));
+                    }));
+
+                    engine.Execute(script);
+
+                    if (engine.GetValue("async") != true)
+                    {
+                        tcs.TrySetResult(JsonMapper.Map(engine.GetCompletionValue()));
+                    }
+                }
+
+                return tcs.Task;
+            }
+        }
+
+        private Engine CreateEngine(ScriptContext context, bool nested, CancellationToken cancellationToken = default, ExceptionHandler? exceptionHandler = null, bool async = false)
+        {
+            var engine = new Engine(options =>
+            {
+                options.AddObjectConverter(DefaultConverter.Instance);
+                options.SetReferencesResolver(NullPropagation.Instance);
+                options.Strict();
+                options.TimeoutInterval(Timeout);
+            });
+
+            if (async)
+            {
+                engine.SetValue("async", false);
+            }
+
+            foreach (var extension in extensions)
+            {
+                extension.Extend(engine);
+            }
+
+            var executionContext = new ExecutionContext(engine, cancellationToken, exceptionHandler);
+
+            context.Add(executionContext, nested);
+
+            foreach (var extension in extensions)
+            {
+                extension.Extend(executionContext, async);
+            }
+
+            return executionContext.Engine;
+        }
+
+        private void Execute(Engine engine, string script)
         {
             try
             {
-                engine.Execute(script);
+                var program = parser.Parse(script);
+
+                engine.Execute(program);
             }
             catch (ArgumentException ex)
             {
@@ -130,182 +302,6 @@ namespace Squidex.Domain.Apps.Core.Scripting
             catch (ParserException ex)
             {
                 throw new ValidationException($"Failed to execute script with javascript error: {ex.Message}", new ValidationError(ex.Message));
-            }
-        }
-
-        private Engine CreateScriptEngine(ScriptContext context)
-        {
-            var engine = CreateScriptEngine();
-
-            var contextInstance = new ObjectInstance(engine);
-
-            if (context.Data != null)
-            {
-                contextInstance.FastAddProperty("data", new ContentDataObject(engine, context.Data), true, true, true);
-            }
-
-            if (context.DataOld != null)
-            {
-                contextInstance.FastAddProperty("oldData", new ContentDataObject(engine, context.DataOld), true, true, true);
-            }
-
-            if (context.User != null)
-            {
-                contextInstance.FastAddProperty("user", JintUser.Create(engine, context.User), false, true, false);
-            }
-
-            if (!string.IsNullOrWhiteSpace(context.Operation))
-            {
-                contextInstance.FastAddProperty("operation", context.Operation, false, false, false);
-            }
-
-            contextInstance.FastAddProperty("status", context.Status.ToString(), false, false, false);
-
-            if (context.StatusOld != default)
-            {
-                contextInstance.FastAddProperty("oldStatus", context.StatusOld.ToString(), false, false, false);
-            }
-
-            engine.SetValue("ctx", contextInstance);
-            engine.SetValue("context", contextInstance);
-
-            return engine;
-        }
-
-        private Engine CreateScriptEngine(IReferenceResolver? resolver = null, Dictionary<string, Func<string>>? customFormatters = null)
-        {
-            var engine = new Engine(options =>
-            {
-                if (resolver != null)
-                {
-                    options.SetReferencesResolver(resolver);
-                }
-
-                options.TimeoutInterval(Timeout).Strict().AddObjectConverter(DefaultConverter.Instance);
-            });
-
-            if (customFormatters != null)
-            {
-                foreach (var (key, value) in customFormatters)
-                {
-                    engine.SetValue(key, Safe(value));
-                }
-            }
-
-            engine.SetValue("slugify", new ClrFunctionInstance(engine, "slugify", Slugify));
-            engine.SetValue("formatTime", new ClrFunctionInstance(engine, "formatTime", FormatDate));
-            engine.SetValue("formatDate", new ClrFunctionInstance(engine, "formatDate", FormatDate));
-
-            return engine;
-        }
-
-        private static Func<string> Safe(Func<string> func)
-        {
-            return () =>
-            {
-                try
-                {
-                    return func();
-                }
-                catch
-                {
-                    return "null";
-                }
-            };
-        }
-
-        private static JsValue Slugify(JsValue thisObject, JsValue[] arguments)
-        {
-            try
-            {
-                var stringInput = TypeConverter.ToString(arguments.At(0));
-                var single = false;
-
-                if (arguments.Length > 1)
-                {
-                    single = TypeConverter.ToBoolean(arguments.At(1));
-                }
-
-                return stringInput.Slugify(null, single);
-            }
-            catch
-            {
-                return JsValue.Undefined;
-            }
-        }
-
-        private static JsValue FormatDate(JsValue thisObject, JsValue[] arguments)
-        {
-            try
-            {
-                var dateValue = ((DateInstance)arguments.At(0)).ToDateTime();
-                var dateFormat = TypeConverter.ToString(arguments.At(1));
-
-                return dateValue.ToString(dateFormat, CultureInfo.InvariantCulture);
-            }
-            catch
-            {
-                return JsValue.Undefined;
-            }
-        }
-
-        private static void EnableDisallow(Engine engine)
-        {
-            engine.SetValue("disallow", new Action<string>(message =>
-            {
-                var exMessage = !string.IsNullOrWhiteSpace(message) ? message : "Not allowed";
-
-                throw new DomainForbiddenException(exMessage);
-            }));
-        }
-
-        private static void EnableReject(Engine engine)
-        {
-            engine.SetValue("reject", new Action<string>(message =>
-            {
-                var errors = !string.IsNullOrWhiteSpace(message) ? new[] { new ValidationError(message) } : null;
-
-                throw new ValidationException("Script rejected the operation.", errors);
-            }));
-        }
-
-        public bool Evaluate(string name, object context, string script)
-        {
-            try
-            {
-                var result =
-                    CreateScriptEngine(NullPropagation.Instance)
-                        .SetValue(name, context)
-                        .Execute(script)
-                        .GetCompletionValue()
-                        .ToObject();
-
-                return (bool)result;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        public string? Interpolate(string name, object context, string script, Dictionary<string, Func<string>>? customFormatters = null)
-        {
-            try
-            {
-                var result =
-                    CreateScriptEngine(NullPropagation.Instance, customFormatters)
-                        .SetValue(name, context)
-                        .Execute(script)
-                        .GetCompletionValue()
-                        .ToObject();
-
-                var converted = result.ToString();
-
-                return converted == "undefined" ? "null" : converted;
-            }
-            catch (Exception ex)
-            {
-                return ex.Message;
             }
         }
     }

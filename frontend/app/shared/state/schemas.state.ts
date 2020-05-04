@@ -6,35 +6,11 @@
  */
 
 import { Injectable } from '@angular/core';
+import { compareStrings, defined, DialogService, shareMapSubscribed, shareSubscribed, State, Types, Version } from '@app/framework';
 import { empty, Observable, of } from 'rxjs';
 import { catchError, finalize, tap } from 'rxjs/operators';
-
-import {
-    compareStrings,
-    defined,
-    DialogService,
-    shareMapSubscribed,
-    shareSubscribed,
-    State,
-    Types,
-    Version
-} from '@app/framework';
-
+import { AddFieldDto, CreateSchemaDto, FieldDto, NestedFieldDto, RootFieldDto, SchemaDetailsDto, SchemaDto, SchemasService, UpdateFieldDto, UpdateSchemaDto, UpdateUIFields } from './../services/schemas.service';
 import { AppsState } from './apps.state';
-
-import {
-    AddFieldDto,
-    CreateSchemaDto,
-    FieldDto,
-    NestedFieldDto,
-    RootFieldDto,
-    SchemaDetailsDto,
-    SchemaDto,
-    SchemasService,
-    UpdateFieldDto,
-    UpdateSchemaDto,
-    UpdateUIFields
-} from './../services/schemas.service';
 
 type AnyFieldDto = NestedFieldDto | RootFieldDto;
 
@@ -95,11 +71,11 @@ export class SchemasState extends State<Snapshot> {
         this.projectFrom2(this.schemas, this.categoriesPlain, (s, c) => buildCategories(c, s));
 
     public get schemaId() {
-        return this.snapshot.selectedSchema ? this.snapshot.selectedSchema.id : '';
+        return this.snapshot.selectedSchema?.id || '';
     }
 
     public get schemaName() {
-        return this.snapshot.selectedSchema ? this.snapshot.selectedSchema.name : '';
+        return this.snapshot.selectedSchema?.name || '';
     }
 
     constructor(
@@ -196,7 +172,11 @@ export class SchemasState extends State<Snapshot> {
             tap(() => {
                 this.next(s => {
                     const schemas = s.schemas.filter(x => x.id !== schema.id);
-                    const selectedSchema = s.selectedSchema && s.selectedSchema.id === schema.id ? null : s.selectedSchema;
+
+                    const selectedSchema =
+                        s.selectedSchema?.id !== schema.id ?
+                        s.selectedSchema :
+                        null;
 
                     return { ...s, schemas, selectedSchema };
                 });

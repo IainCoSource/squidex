@@ -9,24 +9,9 @@
 
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
+import { AnalyticsService, ApiUrlConfig, compareStrings, hasAnyLink, HTTP, mapVersioned, Model, pretifyError, Resource, ResourceLinks, StringHelper, Version, Versioned } from '@app/framework';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
-
-import {
-    AnalyticsService,
-    ApiUrlConfig,
-    compareStrings,
-    hasAnyLink,
-    HTTP,
-    mapVersioned,
-    Model,
-    pretifyError,
-    Resource,
-    ResourceLinks,
-    StringHelper,
-    Version,
-    Versioned
-} from '@app/framework';
 
 export type WorkflowsDto = Versioned<WorkflowsPayload>;
 export type WorkflowsPayload = {
@@ -132,7 +117,7 @@ export class WorkflowDto extends Model<WorkflowDto> {
         if (this.initial === name) {
             const first = steps.find(x => !x.isLocked);
 
-            return this.with({ initial: first ? first.name : null, steps, transitions });
+            return this.with({ initial: first?.name || null, steps, transitions });
         } else {
             return this.with({ steps, transitions });
         }

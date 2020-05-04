@@ -7,20 +7,9 @@
 
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable } from '@angular/core';
+import { AnalyticsService, ApiUrlConfig, DateTime, hasAnyLink, pretifyError, Resource, ResourceLinks, ResultSet, Types } from '@app/framework';
 import { Observable, of, throwError } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
-
-import {
-    AnalyticsService,
-    ApiUrlConfig,
-    DateTime,
-    hasAnyLink,
-    pretifyError,
-    Resource,
-    ResourceLinks,
-    ResultSet,
-    Types
-} from '@app/framework';
 
 export class BackupsDto extends ResultSet<BackupDto> {
     public get canCreate() {
@@ -148,8 +137,8 @@ export class BackupsService {
 function parseRestore(response: any) {
     return new RestoreDto(
         response.url,
-        DateTime.parseISO_UTC(response.started),
-        response.stopped ? DateTime.parseISO_UTC(response.stopped) : null,
+        DateTime.parseISO(response.started),
+        response.stopped ? DateTime.parseISO(response.stopped) : null,
         response.status,
         response.log);
 }
@@ -157,8 +146,8 @@ function parseRestore(response: any) {
 function parseBackup(response: any) {
     return new BackupDto(response._links,
         response.id,
-        DateTime.parseISO_UTC(response.started),
-        response.stopped ? DateTime.parseISO_UTC(response.stopped) : null,
+        DateTime.parseISO(response.started),
+        response.stopped ? DateTime.parseISO(response.stopped) : null,
         response.handledEvents,
         response.handledAssets,
         response.status);

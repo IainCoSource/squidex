@@ -7,27 +7,8 @@
 
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { AppLanguageDto, ContentDto, ContentsState, fadeAnimation, LanguagesState, ModalModel, Queries, Query, QueryModel, queryModelFromSchema, ResourceOwner, SchemaDetailsDto, SchemasState, TableFields, TempService, UIState } from '@app/shared';
 import { onErrorResumeNext, switchMap, tap } from 'rxjs/operators';
-
-import {
-    AppLanguageDto,
-    ContentDto,
-    ContentsState,
-    fadeAnimation,
-    LanguagesState,
-    ModalModel,
-    Queries,
-    Query,
-    QueryModel,
-    queryModelFromSchema,
-    ResourceOwner,
-    SchemaDetailsDto,
-    SchemasState,
-    TableFields,
-    TempService,
-    UIState
-} from '@app/shared';
-
 import { DueTimeSelectorComponent } from './../../shared/due-time-selector.component';
 
 @Component({
@@ -148,7 +129,7 @@ export class ContentsPageComponent extends ResourceOwner implements OnInit {
     }
 
     public clone(content: ContentDto) {
-        this.tempService.put(content.dataDraft);
+        this.tempService.put(content.data);
 
         this.router.navigate(['new'], { relativeTo: this.route });
     }

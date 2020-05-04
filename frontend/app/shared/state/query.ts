@@ -8,7 +8,6 @@
 // tslint:disable: readonly-array
 
 import { Types } from '@app/framework';
-
 import { StatusInfo } from './../services/contents.service';
 import { LanguageDto } from './../services/languages.service';
 import { MetaFields, SchemaDetailsDto } from './../services/schemas.service';
@@ -113,7 +112,7 @@ const DEFAULT_QUERY = {
     sort: []
 };
 
-function santize(query?: Query) {
+export function sanitize(query?: Query) {
     if (!query) {
         return DEFAULT_QUERY;
     }
@@ -130,11 +129,11 @@ function santize(query?: Query) {
 }
 
 export function equalsQuery(lhs?: Query, rhs?: Query) {
-    return Types.equals(santize(lhs), santize(rhs));
+    return Types.equals(sanitize(lhs), sanitize(rhs));
 }
 
 export function encodeQuery(query?: Query) {
-    return encodeURIComponent(JSON.stringify(santize(query)));
+    return encodeURIComponent(JSON.stringify(sanitize(query)));
 }
 
 export function decodeQuery(raw?: string): Query | undefined {

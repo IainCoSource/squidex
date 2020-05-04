@@ -5,7 +5,6 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
-using System.Security;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using FakeItEasy;
@@ -39,7 +38,7 @@ namespace Squidex.Web.CommandMiddlewares
             var command = new CreateContent();
             var context = Ctx(command);
 
-            await Assert.ThrowsAsync<SecurityException>(() => sut.HandleAsync(context));
+            await Assert.ThrowsAsync<DomainForbiddenException>(() => sut.HandleAsync(context));
         }
 
         [Fact]

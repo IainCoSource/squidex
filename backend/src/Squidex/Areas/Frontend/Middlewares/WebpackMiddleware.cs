@@ -15,7 +15,7 @@ namespace Squidex.Areas.Frontend.Middlewares
 {
     public sealed class WebpackMiddleware
     {
-        private const string WebpackUrl = "http://localhost:3000/index.html";
+        private const string WebpackUrl = "https://localhost:3000/index.html";
 
         private readonly RequestDelegate next;
 
@@ -24,11 +24,16 @@ namespace Squidex.Areas.Frontend.Middlewares
             this.next = next;
         }
 
-        public async Task Invoke(HttpContext context)
+        public async Task InvokeAsync(HttpContext context)
         {
             if (context.IsIndex() && context.Response.StatusCode != 304)
             {
-                using (var client = new HttpClient())
+                var handler = new HttpClientHandler
+                {
+                    ServerCertificateCustomValidationCallback = (message, cert, chain, error) => true
+                };
+
+                using (var client = new HttpClient(handler))
                 {
                     var result = await client.GetAsync(WebpackUrl);
 

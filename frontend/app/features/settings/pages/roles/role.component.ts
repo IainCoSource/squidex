@@ -5,17 +5,9 @@
  * Copyright (c) Squidex UG (haftungsbeschränkt). All rights reserved.
  */
 
-import { ChangeDetectionStrategy, Component, Input, OnChanges, ViewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input, OnChanges, SimpleChanges, ViewChild } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
-
-import {
-    AddPermissionForm,
-    AutocompleteComponent,
-    AutocompleteSource,
-    EditRoleForm,
-    RoleDto,
-    RolesState
-} from '@app/shared';
+import { AddPermissionForm, AutocompleteComponent, AutocompleteSource, EditRoleForm, RoleDto, RolesState } from '@app/shared';
 
 const Descriptions = {
     Developer: 'Can use the API view, edit assets, contents, schemas, rules, workflows and patterns.',
@@ -55,11 +47,13 @@ export class RoleComponent implements OnChanges {
     ) {
     }
 
-    public ngOnChanges() {
-        this.isEditable = this.role.canUpdate;
+    public ngOnChanges(changes: SimpleChanges) {
+        if (changes['role']) {
+            this.isEditable = this.role.canUpdate;
 
-        this.editForm.load(this.role);
-        this.editForm.setEnabled(this.isEditable);
+            this.editForm.load(this.role);
+            this.editForm.setEnabled(this.isEditable);
+        }
     }
 
     public toggleEditing() {
@@ -91,7 +85,7 @@ export class RoleComponent implements OnChanges {
         if (value) {
             this.rolesState.update(this.role, value)
                 .subscribe(() => {
-                    this.editForm.submitCompleted();
+                    this.editForm.submitCompleted({ noReset: true });
 
                     this.toggleEditing();
                 }, error => {

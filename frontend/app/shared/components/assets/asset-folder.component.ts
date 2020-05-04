@@ -6,15 +6,7 @@
  */
 
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
-
-import {
-    AssetFolderDto,
-    AssetPathItem,
-    DialogModel,
-    fadeAnimation,
-    ModalModel,
-    Types
-} from '@app/shared/internal';
+import { AssetFolderDto, AssetPathItem, DialogModel, fadeAnimation, ModalModel, Types } from '@app/shared/internal';
 
 @Component({
     selector: 'sqx-asset-folder',
@@ -51,6 +43,10 @@ export class AssetFolderComponent {
         if (mouseEvent.detail > 1) {
             mouseEvent.preventDefault();
         }
+    }
+
+    public emitDelete() {
+        this.delete.emit(this.assetFolder);
     }
 
     public emitNavigate() {

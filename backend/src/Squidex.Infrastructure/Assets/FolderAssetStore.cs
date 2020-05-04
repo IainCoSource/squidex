@@ -10,7 +10,6 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Squidex.Infrastructure.Log;
-using Squidex.Infrastructure.Tasks;
 
 namespace Squidex.Infrastructure.Assets
 {
@@ -43,7 +42,7 @@ namespace Squidex.Infrastructure.Assets
                     .WriteProperty("action", "FolderAssetStoreConfigured")
                     .WriteProperty("path", directory.FullName));
 
-                return TaskHelper.Done;
+                return Task.CompletedTask;
             }
             catch (Exception ex)
             {
@@ -56,19 +55,30 @@ namespace Squidex.Infrastructure.Assets
             return null;
         }
 
+        public Task<long> GetSizeAsync(string fileName, CancellationToken ct = default)
+        {
+            var file = GetFile(fileName, nameof(fileName));
+
+            try
+            {
+                return Task.FromResult(file.Length);
+            }
+            catch (FileNotFoundException ex)
+            {
+                throw new AssetNotFoundException(fileName, ex);
+            }
+        }
+
         public Task CopyAsync(string sourceFileName, string targetFileName, CancellationToken ct = default)
         {
-            Guard.NotNullOrEmpty(sourceFileName);
-            Guard.NotNullOrEmpty(targetFileName);
-
-            var targetFile = GetFile(targetFileName);
-            var sourceFile = GetFile(sourceFileName);
+            var targetFile = GetFile(targetFileName, nameof(targetFileName));
+            var sourceFile = GetFile(sourceFileName, nameof(sourceFileName));
 
             try
             {
                 sourceFile.CopyTo(targetFile.FullName);
 
-                return TaskHelper.Done;
+                return Task.CompletedTask;
             }
             catch (IOException) when (targetFile.Exists)
             {
@@ -80,17 +90,17 @@ namespace Squidex.Infrastructure.Assets
             }
         }
 
-        public async Task DownloadAsync(string fileName, Stream stream, CancellationToken ct = default)
+        public async Task DownloadAsync(string fileName, Stream stream, BytesRange range, CancellationToken ct = default)
         {
             Guard.NotNull(stream);
 
-            var file = GetFile(fileName);
+            var file = GetFile(fileName, nameof(fileName));
 
             try
             {
                 using (var fileStream = file.OpenRead())
                 {
-                    await fileStream.CopyToAsync(stream, BufferSize, ct);
+                    await fileStream.CopyToAsync(stream, range, ct);
                 }
             }
             catch (FileNotFoundException ex)
@@ -103,7 +113,7 @@ namespace Squidex.Infrastructure.Assets
         {
             Guard.NotNull(stream);
 
-            var file = GetFile(fileName);
+            var file = GetFile(fileName, nameof(fileName));
 
             try
             {
@@ -120,16 +130,16 @@ namespace Squidex.Infrastructure.Assets
 
         public Task DeleteAsync(string fileName)
         {
-            var file = GetFile(fileName);
+            var file = GetFile(fileName, nameof(fileName));
 
             file.Delete();
 
-            return TaskHelper.Done;
+            return Task.CompletedTask;
         }
 
-        private FileInfo GetFile(string fileName)
+        private FileInfo GetFile(string fileName, string parameterName)
         {
-            Guard.NotNullOrEmpty(fileName);
+            Guard.NotNullOrEmpty(fileName, parameterName);
 
             return new FileInfo(GetPath(fileName));
         }

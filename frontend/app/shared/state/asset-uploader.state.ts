@@ -6,16 +6,9 @@
  */
 
 import { Injectable } from '@angular/core';
+import { DialogService, MathHelper, State, Types } from '@app/framework';
 import { Observable, Subject } from 'rxjs';
 import { map, publishReplay, refCount, takeUntil } from 'rxjs/operators';
-
-import {
-    DialogService,
-    MathHelper,
-    State,
-    Types
-} from '@app/framework';
-
 import { AssetDto, AssetsService } from './../services/assets.service';
 import { AppsState } from './apps.state';
 import { AssetsState } from './assets.state';
@@ -71,7 +64,7 @@ export class AssetUploaderState extends State<Snapshot> {
     }
 
     public uploadFile(file: File, target?: AssetsState): Observable<UploadResult> {
-        const parentId = target ? target.parentId : undefined;
+        const parentId = target?.parentId || undefined;
 
         const stream = this.assetsService.postAssetFile(this.appName, file, parentId);
 

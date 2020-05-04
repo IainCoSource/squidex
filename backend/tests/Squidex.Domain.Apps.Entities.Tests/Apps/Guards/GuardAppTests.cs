@@ -9,7 +9,7 @@ using System.IO;
 using FakeItEasy;
 using Squidex.Domain.Apps.Core.Apps;
 using Squidex.Domain.Apps.Entities.Apps.Commands;
-using Squidex.Domain.Apps.Entities.Apps.Services;
+using Squidex.Domain.Apps.Entities.Apps.Plans;
 using Squidex.Domain.Apps.Entities.TestHelpers;
 using Squidex.Infrastructure;
 using Squidex.Infrastructure.Assets;
@@ -28,7 +28,7 @@ namespace Squidex.Domain.Apps.Entities.Apps.Guards
 
         public GuardAppTests()
         {
-            A.CallTo(() => users.FindByIdOrEmailAsync(A<string>.Ignored))
+            A.CallTo(() => users.FindByIdOrEmailAsync(A<string>._))
                 .Returns(A.Dummy<IUser>());
 
             A.CallTo(() => appPlans.GetPlan("notfound"))

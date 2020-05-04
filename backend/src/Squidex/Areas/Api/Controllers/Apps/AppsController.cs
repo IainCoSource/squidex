@@ -5,7 +5,6 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
-using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,7 +16,7 @@ using Squidex.Areas.Api.Controllers.Apps.Models;
 using Squidex.Domain.Apps.Entities;
 using Squidex.Domain.Apps.Entities.Apps;
 using Squidex.Domain.Apps.Entities.Apps.Commands;
-using Squidex.Domain.Apps.Entities.Apps.Services;
+using Squidex.Domain.Apps.Entities.Apps.Plans;
 using Squidex.Infrastructure.Assets;
 using Squidex.Infrastructure.Commands;
 using Squidex.Infrastructure.Log;
@@ -209,13 +208,13 @@ namespace Squidex.Areas.Api.Controllers.Apps
 
             Response.Headers[HeaderNames.ETag] = etag;
 
-            var handler = new Func<Stream, Task>(async bodyStream =>
+            var callback = new FileCallback(async (body, range, ct) =>
             {
                 var resizedAsset = $"{App.Id}_{etag}_Resized";
 
                 try
                 {
-                    await assetStore.DownloadAsync(resizedAsset, bodyStream);
+                    await assetStore.DownloadAsync(resizedAsset, body);
                 }
                 catch (AssetNotFoundException)
                 {
@@ -243,14 +242,17 @@ namespace Squidex.Areas.Api.Controllers.Apps
                                     destinationStream.Position = 0;
                                 }
 
-                                await destinationStream.CopyToAsync(bodyStream);
+                                await destinationStream.CopyToAsync(body, ct);
                             }
                         }
                     }
                 }
             });
 
-            return new FileCallbackResult(App.Image.MimeType, null, true, handler);
+            return new FileCallbackResult(App.Image.MimeType, callback)
+            {
+                ErrorAs404 = true
+            };
         }
 
         /// <summary>

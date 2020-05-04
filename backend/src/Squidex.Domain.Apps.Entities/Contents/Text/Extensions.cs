@@ -5,33 +5,18 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
-using System;
 using System.Collections.Generic;
 using System.Text;
-using Lucene.Net.Documents;
-using Lucene.Net.Index;
-using Lucene.Net.Util;
+using Microsoft.Extensions.ObjectPool;
 using Squidex.Domain.Apps.Core.Contents;
-using Squidex.Infrastructure;
 using Squidex.Infrastructure.Json.Objects;
 
 namespace Squidex.Domain.Apps.Entities.Contents.Text
 {
     public static class Extensions
     {
-        public static void SetBinaryDocValue(this Document document, string name, BytesRef value)
-        {
-            document.RemoveField(name);
-
-            document.AddBinaryDocValuesField(name, value);
-        }
-
-        public static void SetField(this Document document, string name, string value)
-        {
-            document.RemoveField(name);
-
-            document.AddStringField(name, value, Field.Store.YES);
-        }
+        private static readonly ObjectPool<StringBuilder> StringBuilderPool =
+            new DefaultObjectPool<StringBuilder>(new StringBuilderPooledObjectPolicy());
 
         public static Dictionary<string, string> ToTexts(this NamedContentData data)
         {
@@ -40,101 +25,76 @@ namespace Squidex.Domain.Apps.Entities.Contents.Text
             if (data != null)
             {
                 var languages = new Dictionary<string, StringBuilder>();
-
-                void AppendText(string language, string text)
+                try
                 {
-                    if (!string.IsNullOrWhiteSpace(text))
+                    foreach (var value in data.Values)
                     {
-                        var sb = languages.GetOrAddNew(language);
-
-                        if (sb.Length > 0)
+                        if (value != null)
                         {
-                            sb.Append(" ");
-                        }
-
-                        sb.Append(text);
-                    }
-                }
-
-                foreach (var value in data.Values)
-                {
-                    if (value != null)
-                    {
-                        foreach (var (key, jsonValue) in value)
-                        {
-                            var appendText = new Action<string>(text => AppendText(key, text));
-
-                            AppendJsonText(jsonValue, appendText);
+                            foreach (var (key, jsonValue) in value)
+                            {
+                                AppendJsonText(languages, key, jsonValue);
+                            }
                         }
                     }
-                }
 
-                foreach (var (key, value) in languages)
+                    foreach (var (key, sb) in languages)
+                    {
+                        result[key] = sb.ToString();
+                    }
+                }
+                finally
                 {
-                    result[key] = value.ToString();
+                    foreach (var (_, sb) in languages)
+                    {
+                        StringBuilderPool.Return(sb);
+                    }
                 }
             }
 
             return result;
         }
 
-        private static void AppendJsonText(IJsonValue value, Action<string> appendText)
+        private static void AppendJsonText(Dictionary<string, StringBuilder> languages, string language, IJsonValue value)
         {
             if (value.Type == JsonValueType.String)
             {
-                appendText(value.ToString());
+                AppendText(languages, language, value.ToString());
             }
             else if (value is JsonArray array)
             {
                 foreach (var item in array)
                 {
-                    AppendJsonText(item, appendText);
+                    AppendJsonText(languages, language, item);
                 }
             }
             else if (value is JsonObject obj)
             {
                 foreach (var item in obj.Values)
                 {
-                    AppendJsonText(item, appendText);
+                    AppendJsonText(languages, language, item);
                 }
             }
         }
 
-        public static BytesRef GetBinaryValue(this IndexReader? reader, string field, int docId, BytesRef? result = null)
+        private static void AppendText(Dictionary<string, StringBuilder> languages, string language, string text)
         {
-            if (result != null)
+            if (!string.IsNullOrWhiteSpace(text))
             {
-                Array.Clear(result.Bytes, 0, result.Bytes.Length);
+                if (!languages.TryGetValue(language, out var sb))
+                {
+                    sb = StringBuilderPool.Get();
+
+                    languages[language] = sb;
+                }
+
+                if (sb.Length > 0)
+                {
+                    sb.Append(" ");
+                }
+
+                sb.Append(text);
             }
-            else
-            {
-                result = new BytesRef();
-            }
-
-            if (reader == null || docId < 0)
-            {
-                return result;
-            }
-
-            var leaves = reader.Leaves;
-
-            if (leaves.Count == 1)
-            {
-                var docValues = leaves[0].AtomicReader.GetBinaryDocValues(field);
-
-                docValues.Get(docId, result);
-            }
-            else if (leaves.Count > 1)
-            {
-                var subIndex = ReaderUtil.SubIndex(docId, leaves);
-
-                var subLeave = leaves[subIndex];
-                var subValues = subLeave.AtomicReader.GetBinaryDocValues(field);
-
-                subValues.Get(docId - subLeave.DocBase, result);
-            }
-
-            return result;
         }
     }
 }

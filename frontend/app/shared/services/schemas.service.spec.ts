@@ -7,23 +7,7 @@
 
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { inject, TestBed } from '@angular/core/testing';
-
-import {
-    AnalyticsService,
-    ApiUrlConfig,
-    createProperties,
-    DateTime,
-    NestedFieldDto,
-    Resource,
-    ResourceLinks,
-    RootFieldDto,
-    SchemaDetailsDto,
-    SchemaDto,
-    SchemaPropertiesDto,
-    SchemasDto,
-    SchemasService,
-    Version
-} from '@app/shared/internal';
+import { AnalyticsService, ApiUrlConfig, createProperties, DateTime, NestedFieldDto, Resource, ResourceLinks, RootFieldDto, SchemaDetailsDto, SchemaDto, SchemaPropertiesDto, SchemasDto, SchemasService, Version } from '@app/shared/internal';
 
 describe('SchemasService', () => {
     const version = new Version('1');
@@ -596,9 +580,9 @@ describe('SchemasService', () => {
             category: `category${id}${suffix}`,
             isSingleton: id % 2 === 0,
             isPublished: id % 3 === 0,
-            created: `${id % 1000 + 2000}-12-12T10:10:00`,
+            created: `${id % 1000 + 2000}-12-12T10:10:00Z`,
             createdBy: `creator${id}`,
-            lastModified: `${id % 1000 + 2000}-11-11T10:10:00`,
+            lastModified: `${id % 1000 + 2000}-11-11T10:10:00Z`,
             lastModifiedBy: `modifier${id}`,
             properties: {
                 label: `label${id}${suffix}`,
@@ -619,9 +603,9 @@ describe('SchemasService', () => {
             category: `category${id}${suffix}`,
             isSingleton: id % 2 === 0,
             isPublished: id % 3 === 0,
-            created: `${id % 1000 + 2000}-12-12T10:10:00`,
+            created: `${id % 1000 + 2000}-12-12T10:10:00Z`,
             createdBy: `creator${id}`,
-            lastModified: `${id % 1000 + 2000}-11-11T10:10:00`,
+            lastModified: `${id % 1000 + 2000}-11-11T10:10:00Z`,
             lastModifiedBy: `modifier${id}`,
             version: `${id}`,
             properties: {
@@ -808,8 +792,8 @@ export function createSchema(id: number, suffix = '') {
         new SchemaPropertiesDto(`label${id}${suffix}`, `hints${id}${suffix}`, [`tags${id}${suffix}`]),
         id % 2 === 0,
         id % 3 === 0,
-        DateTime.parseISO_UTC(`${id % 1000 + 2000}-12-12T10:10:00`), `creator${id}`,
-        DateTime.parseISO_UTC(`${id % 1000 + 2000}-11-11T10:10:00`), `modifier${id}`,
+        DateTime.parseISO(`${id % 1000 + 2000}-12-12T10:10:00Z`), `creator${id}`,
+        DateTime.parseISO(`${id % 1000 + 2000}-11-11T10:10:00Z`), `modifier${id}`,
         new Version(`${id}${suffix}`));
 }
 
@@ -825,8 +809,8 @@ export function createSchemaDetails(id: number, suffix = '') {
         new SchemaPropertiesDto(`label${id}${suffix}`, `hints${id}${suffix}`, [`tags${id}${suffix}`]),
         id % 2 === 0,
         id % 3 === 0,
-        DateTime.parseISO_UTC(`${id % 1000 + 2000}-12-12T10:10:00`), `creator${id}`,
-        DateTime.parseISO_UTC(`${id % 1000 + 2000}-11-11T10:10:00`), `modifier${id}`,
+        DateTime.parseISO(`${id % 1000 + 2000}-12-12T10:10:00Z`), `creator${id}`,
+        DateTime.parseISO(`${id % 1000 + 2000}-11-11T10:10:00Z`), `modifier${id}`,
         new Version(`${id}${suffix}`),
         [
             new RootFieldDto({}, 11, 'field11', createProperties('Array'), 'language', true, true, true, [

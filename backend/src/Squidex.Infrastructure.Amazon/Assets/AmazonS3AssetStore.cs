@@ -79,21 +79,43 @@ namespace Squidex.Infrastructure.Assets
             return null;
         }
 
-        public async Task CopyAsync(string sourceFileName, string targetFileName, CancellationToken ct = default)
+        public async Task<long> GetSizeAsync(string fileName, CancellationToken ct = default)
         {
-            Guard.NotNullOrEmpty(sourceFileName);
-            Guard.NotNullOrEmpty(targetFileName);
+            var key = GetKey(fileName, nameof(fileName));
 
             try
             {
-                await EnsureNotExistsAsync(targetFileName, ct);
+                var request = new GetObjectMetadataRequest
+                {
+                    BucketName = options.Bucket,
+                    Key = key
+                };
+
+                var metadata = await s3Client.GetObjectMetadataAsync(request, ct);
+
+                return metadata.ContentLength;
+            }
+            catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                throw new AssetNotFoundException(fileName, ex);
+            }
+        }
+
+        public async Task CopyAsync(string sourceFileName, string targetFileName, CancellationToken ct = default)
+        {
+            var sourceKey = GetKey(sourceFileName, nameof(sourceFileName));
+            var targetKey = GetKey(targetFileName, nameof(targetFileName));
+
+            try
+            {
+                await EnsureNotExistsAsync(targetKey, targetFileName, ct);
 
                 var request = new CopyObjectRequest
                 {
                     SourceBucket = options.Bucket,
-                    SourceKey = GetKey(sourceFileName),
+                    SourceKey = sourceKey,
                     DestinationBucket = options.Bucket,
-                    DestinationKey = GetKey(targetFileName)
+                    DestinationKey = targetKey
                 };
 
                 await s3Client.CopyObjectAsync(request, ct);
@@ -108,14 +130,24 @@ namespace Squidex.Infrastructure.Assets
             }
         }
 
-        public async Task DownloadAsync(string fileName, Stream stream, CancellationToken ct = default)
+        public async Task DownloadAsync(string fileName, Stream stream, BytesRange range = default, CancellationToken ct = default)
         {
-            Guard.NotNullOrEmpty(fileName);
             Guard.NotNull(stream);
+
+            var key = GetKey(fileName, nameof(fileName));
 
             try
             {
-                var request = new GetObjectRequest { BucketName = options.Bucket, Key = GetKey(fileName) };
+                var request = new GetObjectRequest
+                {
+                    BucketName = options.Bucket,
+                    Key = key
+                };
+
+                if (range.IsDefined)
+                {
+                    request.ByteRange = new ByteRange(range.ToString());
+                }
 
                 using (var response = await s3Client.GetObjectAsync(request, ct))
                 {
@@ -130,25 +162,24 @@ namespace Squidex.Infrastructure.Assets
 
         public async Task UploadAsync(string fileName, Stream stream, bool overwrite = false, CancellationToken ct = default)
         {
-            Guard.NotNullOrEmpty(fileName);
             Guard.NotNull(stream);
+
+            var key = GetKey(fileName, nameof(fileName));
 
             try
             {
                 if (!overwrite)
                 {
-                    await EnsureNotExistsAsync(fileName, ct);
+                    await EnsureNotExistsAsync(key, fileName, ct);
                 }
 
                 var request = new TransferUtilityUploadRequest
                 {
-                    Key = GetKey(fileName)
+                    BucketName = options.Bucket,
+                    Key = key
                 };
 
-                ConfigureDefaults(request);
-
-                // Amazon S3 requires a seekable stream, but does not seek anything.
-                request.InputStream = new SeekFakerStream(stream);
+                SetStream(stream, request);
 
                 await transferUtility.UploadAsync(request, ct);
             }
@@ -160,11 +191,15 @@ namespace Squidex.Infrastructure.Assets
 
         public async Task DeleteAsync(string fileName)
         {
-            Guard.NotNullOrEmpty(fileName);
+            var key = GetKey(fileName, nameof(fileName));
 
             try
             {
-                var request = new DeleteObjectRequest { BucketName = options.Bucket, Key = fileName };
+                var request = new DeleteObjectRequest
+                {
+                    BucketName = options.Bucket,
+                    Key = key
+                };
 
                 await s3Client.DeleteObjectAsync(request);
             }
@@ -174,8 +209,10 @@ namespace Squidex.Infrastructure.Assets
             }
         }
 
-        private string GetKey(string fileName)
+        private string GetKey(string fileName, string parameterName)
         {
+            Guard.NotNullOrEmpty(fileName, parameterName);
+
             if (!string.IsNullOrWhiteSpace(options.BucketFolder))
             {
                 return $"{options.BucketFolder}/{fileName}";
@@ -186,11 +223,11 @@ namespace Squidex.Infrastructure.Assets
             }
         }
 
-        private async Task EnsureNotExistsAsync(string fileName, CancellationToken ct)
+        private async Task EnsureNotExistsAsync(string key, string fileName, CancellationToken ct)
         {
             try
             {
-                await s3Client.GetObjectAsync(options.Bucket, GetKey(fileName), ct);
+                await s3Client.GetObjectAsync(options.Bucket, key, ct);
             }
             catch
             {
@@ -200,10 +237,11 @@ namespace Squidex.Infrastructure.Assets
             throw new AssetAlreadyExistsException(fileName);
         }
 
-        private void ConfigureDefaults(TransferUtilityUploadRequest request)
+        private static void SetStream(Stream stream, TransferUtilityUploadRequest request)
         {
+            // Amazon S3 requires a seekable stream, but does not seek anything.
+            request.InputStream = new SeekFakerStream(stream);
             request.AutoCloseStream = false;
-            request.BucketName = options.Bucket;
         }
     }
 }

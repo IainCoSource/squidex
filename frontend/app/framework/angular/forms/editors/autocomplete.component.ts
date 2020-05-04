@@ -5,16 +5,11 @@
  * Copyright (c) Squidex UG (haftungsbeschränkt). All rights reserved.
  */
 
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ContentChild, ElementRef, forwardRef, Input, OnInit, TemplateRef, ViewChild } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ContentChild, ElementRef, forwardRef, Input, OnDestroy, OnInit, TemplateRef, ViewChild } from '@angular/core';
 import { FormControl, NG_VALUE_ACCESSOR } from '@angular/forms';
+import { fadeAnimation, Keys, StatefulControlComponent, Types } from '@app/framework/internal';
 import { Observable, of } from 'rxjs';
-import { catchError, debounceTime, distinctUntilChanged, filter, map, switchMap, tap } from 'rxjs/operators';
-
-import {
-    fadeAnimation,
-    Keys,
-    StatefulControlComponent
-} from '@app/framework/internal';
+import { catchError, debounceTime, distinctUntilChanged, finalize, map, switchMap, tap } from 'rxjs/operators';
 
 export interface AutocompleteSource {
     find(query: string): Observable<ReadonlyArray<any>>;
@@ -30,6 +25,12 @@ interface State {
 
     // The selected suggest item index.
     suggestedIndex: number;
+
+    // True, when the searching is in progress.
+    isSearching?: boolean;
+
+    // Indicates whether the loading is in progress.
+    isLoading?: boolean;
 }
 
 const NO_EMIT = { emitEvent: false };
@@ -46,7 +47,9 @@ const NO_EMIT = { emitEvent: false };
     ],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AutocompleteComponent extends StatefulControlComponent<State, ReadonlyArray<any>> implements OnInit {
+export class AutocompleteComponent extends StatefulControlComponent<State, ReadonlyArray<any>> implements OnInit, OnDestroy {
+    private timer: any;
+
     @Input()
     public source: AutocompleteSource;
 
@@ -54,16 +57,25 @@ export class AutocompleteComponent extends StatefulControlComponent<State, Reado
     public inputName = 'autocompletion';
 
     @Input()
-    public displayProperty = '';
+    public displayProperty: string;
 
     @Input()
     public placeholder = '';
+
+    @Input()
+    public icon: string;
 
     @Input()
     public autoFocus = false;
 
     @Input()
     public underlined = false;
+
+    @Input()
+    public debounceTime = 300;
+
+    @Input()
+    public dropdownWidth = '18rem';
 
     @ContentChild(TemplateRef, { static: false })
     public itemTemplate: TemplateRef<any>;
@@ -80,28 +92,45 @@ export class AutocompleteComponent extends StatefulControlComponent<State, Reado
         });
     }
 
+    public ngOnDestroy() {
+        clearTimeout(this.timer);
+    }
+
     public ngOnInit() {
         this.own(
             this.queryInput.valueChanges.pipe(
                     tap(query => {
                         this.callChange(query);
                     }),
-                    map(query => <string>query),
-                    map(query => query ? query.trim() : query),
-                    tap(query => {
-                        if (!query) {
-                            this.reset();
+                    map(query => {
+                        if (Types.isString(query)) {
+                            return query.trim();
+                        } else {
+                            return '';
                         }
                     }),
-                    debounceTime(500),
+                    debounceTime(this.debounceTime),
                     distinctUntilChanged(),
-                    filter(query => !!query && !!this.source),
-                    switchMap(query => this.source.find(query)), catchError(() => of([])))
+                    switchMap(query => {
+                        if (!query || !this.source) {
+                            return of([]);
+                        } else {
+                            this.setLoading(true);
+
+                            return this.source.find(query).pipe(
+                                finalize(() => {
+                                    this.setLoading(false);
+                                }),
+                                catchError(() => of([]))
+                            );
+                        }
+                    }))
                 .subscribe(items => {
                     this.next(s => ({
                         ...s,
                         suggestedIndex: -1,
-                        suggestedItems: items || []
+                        suggestedItems: items || [],
+                        isSearching: false
                     }));
                 }));
     }
@@ -139,32 +168,33 @@ export class AutocompleteComponent extends StatefulControlComponent<State, Reado
             }
         }
 
-        this.reset();
+        this.resetState();
     }
 
     public setDisabledState(isDisabled: boolean): void {
         if (isDisabled) {
-            this.reset();
+            this.resetState();
             this.queryInput.disable(NO_EMIT);
         } else {
             this.queryInput.enable(NO_EMIT);
         }
     }
 
-    public registerOnChange(fn: any) {
-        this.callChange = fn;
-    }
+    public reset() {
+        this.resetState();
 
-    public registerOnTouched(fn: any) {
-        this.callTouched = fn;
+        this.queryInput.setValue('', NO_EMIT);
     }
 
     public focus() {
+        this.resetState();
+
         this.inputControl.nativeElement.focus();
     }
 
     public blur() {
-        this.reset();
+        this.resetState();
+
         this.callTouched();
     }
 
@@ -184,15 +214,29 @@ export class AutocompleteComponent extends StatefulControlComponent<State, Reado
                 } else {
                     this.queryInput.setValue(selection.toString(), NO_EMIT);
                 }
+
                 this.callChange(selection);
+                this.callTouched();
             } finally {
-                this.reset();
+                this.resetState();
             }
 
             return true;
         }
 
         return false;
+    }
+
+    private setLoading(value: boolean) {
+        clearTimeout(this.timer);
+
+        if (value) {
+            this.next(s => ({ ...s, isLoading: true }));
+        } else {
+            this.timer = setTimeout(() => {
+                this.next(s => ({ ...s, isLoading: false }));
+            }, 250);
+        }
     }
 
     public selectIndex(suggestedIndex: number) {
@@ -217,13 +261,5 @@ export class AutocompleteComponent extends StatefulControlComponent<State, Reado
 
     private resetForm() {
         this.queryInput.setValue('', NO_EMIT);
-    }
-
-    private reset() {
-        this.next(s => ({
-            ...s,
-            suggestedItems: [],
-            suggestedIndex: -1
-        }));
     }
 }

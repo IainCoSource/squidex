@@ -5,8 +5,8 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
-using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,20 +15,22 @@ using Squidex.Web.Pipeline;
 
 namespace Squidex.Web
 {
+    public delegate Task FileCallback(Stream body, BytesRange range, CancellationToken ct);
+
     public sealed class FileCallbackResult : FileResult
     {
-        public bool Send404 { get; }
+        public bool ErrorAs404 { get; set; }
 
-        public Func<Stream, Task> Callback { get; }
+        public bool SendInline { get; set; }
 
-        public FileCallbackResult(string contentType, string? name, bool send404, Func<Stream, Task> callback)
+        public long? FileSize { get; set; }
+
+        public FileCallback Callback { get; }
+
+        public FileCallbackResult(string contentType, FileCallback callback)
             : base(contentType)
         {
             Guard.NotNull(callback);
-
-            FileDownloadName = name;
-
-            Send404 = send404;
 
             Callback = callback;
         }
@@ -41,5 +43,3 @@ namespace Squidex.Web
         }
     }
 }
-
-#pragma warning restore 1573

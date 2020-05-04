@@ -35,6 +35,8 @@ namespace Squidex.Config.Web
 
         public static IApplicationBuilder UseSquidexTracking(this IApplicationBuilder app)
         {
+            app.UseMiddleware<RequestExceptionMiddleware>();
+            app.UseMiddleware<UsageMiddleware>();
             app.UseMiddleware<RequestLogPerformanceMiddleware>();
 
             return app;
@@ -73,7 +75,7 @@ namespace Squidex.Config.Web
 
             app.UseHealthChecks("/readiness", new HealthCheckOptions
             {
-                Predicate = check => true,
+                Predicate = check => !check.Tags.Contains("background"),
                 ResponseWriter = writer
             });
 
@@ -86,6 +88,12 @@ namespace Squidex.Config.Web
             app.UseHealthChecks("/cluster-healthz", new HealthCheckOptions
             {
                 Predicate = check => check.Tags.Contains("cluster"),
+                ResponseWriter = writer
+            });
+
+            app.UseHealthChecks("/background-healthz", new HealthCheckOptions
+            {
+                Predicate = check => check.Tags.Contains("background"),
                 ResponseWriter = writer
             });
 
@@ -112,6 +120,7 @@ namespace Squidex.Config.Web
             app.UseForwardedHeaders(GetForwardingOptions(config));
 
             app.UseMiddleware<EnforceHttpsMiddleware>();
+
             app.UseMiddleware<CleanupHostMiddleware>();
         }
 
@@ -123,7 +132,10 @@ namespace Squidex.Config.Web
             {
                 return new ForwardedHeadersOptions
                 {
-                    AllowedHosts = new List<string> { new Uri(urlsOptions.BaseUrl).Host },
+                    AllowedHosts = new List<string>
+                    {
+                        new Uri(urlsOptions.BaseUrl).Host
+                    },
                     ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost,
                     ForwardLimit = null,
                     RequireHeaderSymmetry = false

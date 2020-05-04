@@ -8,18 +8,7 @@
 import { CdkDragDrop } from '@angular/cdk/drag-drop';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, forwardRef, OnInit } from '@angular/core';
 import { NG_VALUE_ACCESSOR } from '@angular/forms';
-
-import {
-    AppsState,
-    AssetDto,
-    AssetsService,
-    DialogModel,
-    LocalStoreService,
-    MessageBus,
-    sorted,
-    StatefulControlComponent,
-    Types
-} from '@app/shared';
+import { AppsState, AssetDto, AssetsService, DialogModel, LocalStoreService, MessageBus, sorted, StatefulControlComponent, Types } from '@app/shared';
 
 export const SQX_ASSETS_EDITOR_CONTROL_VALUE_ACCESSOR: any = {
     provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => AssetsEditorComponent), multi: true
@@ -79,7 +68,7 @@ export class AssetsEditorComponent extends StatefulControlComponent<State, Reado
             if (!Types.equals(obj, this.snapshot.assets.map(x => x.id))) {
                 const assetIds: string[] = obj;
 
-                this.assetsService.getAssets(this.appsState.appName, 0, 0, undefined, undefined, obj)
+                this.assetsService.getAssets(this.appsState.appName, { ids: obj })
                     .subscribe(dtos => {
                         this.setAssets(assetIds.map(id => dtos.items.find(x => x.id === id)!).filter(a => !!a));
 

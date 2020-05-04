@@ -6,16 +6,9 @@
  */
 
 import { Injectable } from '@angular/core';
+import { DialogService, shareSubscribed, State, Version } from '@app/framework';
 import { Observable } from 'rxjs';
 import { finalize, tap } from 'rxjs/operators';
-
-import {
-    DialogService,
-    shareSubscribed,
-    State,
-    Version
-} from '@app/framework';
-
 import { AuthService } from './../services/auth.service';
 import { PlanDto, PlansService } from './../services/plans.service';
 import { AppsState } from './apps.state';
@@ -134,7 +127,11 @@ export class PlansState extends State<Snapshot> {
     }
 
     private createPlan(plan: PlanDto, id: string) {
-        return { plan, isYearlySelected: plan.yearlyId === id, isSelected: plan.id === id };
+        return {
+            plan,
+            isSelected: plan.id === id,
+            isYearlySelected: plan.yearlyId === id
+        };
     }
 
     private get appName() {

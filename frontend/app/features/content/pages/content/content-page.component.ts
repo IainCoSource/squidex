@@ -5,37 +5,13 @@
  * Copyright (c) Squidex UG (haftungsbeschränkt). All rights reserved.
  */
 
-import { Component, OnInit, ViewChild } from '@angular/core';
+// tslint:disable: max-line-length
+
+import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { ApiUrlConfig, AppLanguageDto, AuthService, AutoSaveKey, AutoSaveService, CanComponentDeactivate, ContentDto, ContentsState, DialogService, EditContentForm, fadeAnimation, FieldDto, LanguagesState, ModalModel, ResourceOwner, SchemaDetailsDto, SchemasState, TempService, Version } from '@app/shared';
 import { Observable, of } from 'rxjs';
-import { debounceTime, filter, onErrorResumeNext, switchMap, tap } from 'rxjs/operators';
-
-import { ContentVersionSelected } from './../messages';
-
-import {
-    ApiUrlConfig,
-    AppLanguageDto,
-    AuthService,
-    AutoSaveKey,
-    AutoSaveService,
-    CanComponentDeactivate,
-    ContentDto,
-    ContentsState,
-    DialogService,
-    EditContentForm,
-    fadeAnimation,
-    FieldDto,
-    LanguagesState,
-    MessageBus,
-    ModalModel,
-    ResourceOwner,
-    SchemaDetailsDto,
-    SchemasState,
-    TempService,
-    Version
-} from '@app/shared';
-
-import { DueTimeSelectorComponent } from './../../shared/due-time-selector.component';
+import { debounceTime, filter, onErrorResumeNext, tap } from 'rxjs/operators';
 
 @Component({
     selector: 'sqx-content-page',
@@ -48,9 +24,6 @@ import { DueTimeSelectorComponent } from './../../shared/due-time-selector.compo
 export class ContentPageComponent extends ResourceOwner implements CanComponentDeactivate, OnInit {
     private isLoadingContent: boolean;
     private autoSaveKey: AutoSaveKey;
-
-    @ViewChild('dueTimeSelector', { static: false })
-    public dueTimeSelector: DueTimeSelectorComponent;
 
     public schema: SchemaDetailsDto;
 
@@ -66,22 +39,17 @@ export class ContentPageComponent extends ResourceOwner implements CanComponentD
     public language: AppLanguageDto;
     public languages: ReadonlyArray<AppLanguageDto>;
 
-    public trackByFieldFn: (index: number, field: FieldDto) => any;
-
     constructor(apiUrl: ApiUrlConfig, authService: AuthService,
         public readonly contentsState: ContentsState,
         private readonly autoSaveService: AutoSaveService,
         private readonly dialogs: DialogService,
         private readonly languagesState: LanguagesState,
-        private readonly messageBus: MessageBus,
         private readonly route: ActivatedRoute,
         private readonly router: Router,
         private readonly schemasState: SchemasState,
         private readonly tempService: TempService
     ) {
         super();
-
-        this.trackByFieldFn = this.trackByField.bind(this);
 
         this.formContext = { user: authService.user, apiUrl: apiUrl.buildUrl('api') };
     }
@@ -111,19 +79,21 @@ export class ContentPageComponent extends ResourceOwner implements CanComponentD
 
                     this.content = content;
 
+                    this.formContext['initialContent'] = this.content;
+
                     this.autoSaveKey = {
                         schemaId: this.schema.id,
                         schemaVersion: this.schema.version,
-                        contentId: content ? content.id : undefined
+                        contentId: content?.id
                     };
 
+                    const autosaved = this.autoSaveService.get(this.autoSaveKey);
+
                     if (content) {
-                        this.loadContent(content.dataDraft, true);
+                        this.loadContent(content.data, true);
                     }
 
                     const clone = this.tempService.fetch();
-
-                    const autosaved = this.autoSaveService.get(this.autoSaveKey);
 
                     if (clone) {
                         this.loadContent(clone, true);
@@ -147,12 +117,6 @@ export class ContentPageComponent extends ResourceOwner implements CanComponentD
                 ).subscribe(value => {
                     this.autoSaveService.set(this.autoSaveKey, value);
                 }));
-
-        this.own(
-            this.messageBus.of(ContentVersionSelected)
-                .subscribe(message => {
-                    this.loadVersion(message.version, message.compare);
-                }));
     }
 
     public canDeactivate(): Observable<boolean> {
@@ -166,45 +130,28 @@ export class ContentPageComponent extends ResourceOwner implements CanComponentD
     }
 
     public saveAndPublish() {
-        this.saveContent(true, false);
-    }
-
-    public saveAsDraft() {
-        this.saveContent(false, true);
+        this.saveContent(true);
     }
 
     public save() {
-        this.saveContent(false, false);
+        this.saveContent(false);
     }
 
-    private saveContent(publish: boolean, asDraft: boolean) {
+    private saveContent(publish: boolean) {
         const value = this.contentForm.submit();
 
         if (value) {
             if (this.content) {
-                if (asDraft) {
-                    if (!this.content.canDraftPropose) {
-                        return;
-                    }
-
-                    this.contentsState.proposeDraft(this.content, value)
-                        .subscribe(() => {
-                            this.contentForm.submitCompleted({ noReset: true });
-                        }, error => {
-                            this.contentForm.submitFailed(error);
-                        });
-                } else {
-                    if (!this.content.canUpdate) {
-                        return;
-                    }
-
-                    this.contentsState.update(this.content, value)
-                        .subscribe(() => {
-                            this.contentForm.submitCompleted({ noReset: true });
-                        }, error => {
-                            this.contentForm.submitFailed(error);
-                        });
+                if (!this.content.canUpdate) {
+                    return;
                 }
+
+                this.contentsState.update(this.content, value)
+                    .subscribe(() => {
+                        this.contentForm.submitCompleted({ noReset: true });
+                    }, error => {
+                        this.contentForm.submitFailed(error);
+                    });
             } else {
                 if (!this.canCreate(publish)) {
                     return;
@@ -236,14 +183,6 @@ export class ContentPageComponent extends ResourceOwner implements CanComponentD
         this.router.navigate([this.schema.name], { relativeTo: this.route.parent!.parent, replaceUrl: true });
     }
 
-    public discardChanges() {
-        const content = this.content;
-
-        if (content) {
-            this.contentsState.discardDraft(content);
-        }
-    }
-
     public delete() {
         const content = this.content;
 
@@ -255,34 +194,8 @@ export class ContentPageComponent extends ResourceOwner implements CanComponentD
         }
     }
 
-    public publishChanges() {
-        const content = this.content;
-
-        if (content) {
-            this.checkPendingChanges('publish your changes').pipe(
-                    filter(x => !!x),
-                    switchMap(_ => this.dueTimeSelector.selectDueTime(status)),
-                    switchMap(d => this.contentsState.publishDraft(content, d)),
-                    onErrorResumeNext())
-                .subscribe();
-        }
-    }
-
-    public changeStatus(status: string) {
-        const content = this.content;
-
-        if (content) {
-            this.checkPendingChanges('change the status').pipe(
-                    filter(x => !!x),
-                    switchMap(_ => this.dueTimeSelector.selectDueTime(status)),
-                    switchMap(d => this.contentsState.changeStatus(content, status, d)),
-                    onErrorResumeNext())
-                .subscribe();
-        }
-    }
-
-    private checkPendingChanges(action: string) {
-        if (this.content && !this.content.canUpdateAny) {
+    public checkPendingChanges(action: string) {
+        if (this.content && !this.content.canUpdate) {
             return of(true);
         }
 
@@ -291,17 +204,17 @@ export class ContentPageComponent extends ResourceOwner implements CanComponentD
             of(true);
     }
 
-    public showLatest() {
+    public loadLatest() {
         this.loadVersion(null, false);
     }
 
-    private loadVersion(version: Version | null, compare: boolean) {
+    public loadVersion(version: Version | null, compare: boolean) {
         const content = this.content;
 
         if (!content || version === null || version.eq(content.version)) {
             this.contentFormCompare = null;
             this.contentVersion = null;
-            this.loadContent(content ? content.dataDraft : {}, true);
+            this.loadContent(content?.data || {}, true);
         } else {
             this.contentsState.loadVersion(content, version)
                 .subscribe(dto => {
@@ -311,7 +224,7 @@ export class ContentPageComponent extends ResourceOwner implements CanComponentD
                         this.contentFormCompare.load(dto.payload);
                         this.contentFormCompare.setEnabled(false);
 
-                        this.loadContent(content.dataDraft, false);
+                        this.loadContent(content.data, false);
                     } else {
                         this.contentFormCompare = null;
 
@@ -330,14 +243,14 @@ export class ContentPageComponent extends ResourceOwner implements CanComponentD
 
         try {
             this.contentForm.load(data, isInitial);
-            this.contentForm.setEnabled(!this.content || this.content.canUpdateAny);
+            this.contentForm.setEnabled(!this.content || this.content.canUpdate);
         } finally {
             this.isLoadingContent = false;
         }
     }
 
-    public trackByField(index: number, field: FieldDto) {
-        return field.fieldId + this.schema.id;
+    public trackByField(field: FieldDto) {
+        return field.fieldId;
     }
 }
 

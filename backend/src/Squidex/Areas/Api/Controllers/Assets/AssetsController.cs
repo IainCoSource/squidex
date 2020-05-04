@@ -14,7 +14,7 @@ using Microsoft.Net.Http.Headers;
 using Squidex.Areas.Api.Controllers.Assets.Models;
 using Squidex.Domain.Apps.Core.Tags;
 using Squidex.Domain.Apps.Entities;
-using Squidex.Domain.Apps.Entities.Apps.Services;
+using Squidex.Domain.Apps.Entities.Apps.Plans;
 using Squidex.Domain.Apps.Entities.Assets;
 using Squidex.Domain.Apps.Entities.Assets.Commands;
 using Squidex.Infrastructure.Assets;
@@ -96,11 +96,36 @@ namespace Squidex.Areas.Api.Controllers.Assets
         [ApiCosts(1)]
         public async Task<IActionResult> GetAssets(string app, [FromQuery] Guid? parentId, [FromQuery] string? ids = null, [FromQuery] string? q = null)
         {
-            var assets = await assetQuery.QueryAsync(Context, parentId,
-                Q.Empty
-                    .WithIds(ids)
-                    .WithJsonQuery(q)
-                    .WithODataQuery(Request.QueryString.ToString()));
+            var assets = await assetQuery.QueryAsync(Context, parentId, CreateQuery(ids, q));
+
+            var response = Deferred.Response(() =>
+            {
+                return AssetsDto.FromAssets(assets, this, app);
+            });
+
+            return Ok(response);
+        }
+
+        /// <summary>
+        /// Get assets.
+        /// </summary>
+        /// <param name="app">The name of the app.</param>
+        /// <param name="query">The required query object.</param>
+        /// <returns>
+        /// 200 => Assets returned.
+        /// 404 => App not found.
+        /// </returns>
+        /// <remarks>
+        /// Get all assets for the app.
+        /// </remarks>
+        [HttpPost]
+        [Route("apps/{app}/assets/query")]
+        [ProducesResponseType(typeof(AssetsDto), 200)]
+        [ApiPermission(Permissions.AppAssetsRead)]
+        [ApiCosts(1)]
+        public async Task<IActionResult> GetAssetsPost(string app, [FromBody] QueryDto query)
+        {
+            var assets = await assetQuery.QueryAsync(Context, query?.ParentId, query?.ToQuery() ?? Q.Empty);
 
             var response = Deferred.Response(() =>
             {
@@ -296,7 +321,7 @@ namespace Squidex.Areas.Api.Controllers.Assets
                 throw new ValidationException("Cannot create asset.", error);
             }
 
-            var plan = appPlansProvider.GetPlanForApp(App);
+            var (plan, _) = appPlansProvider.GetPlanForApp(App);
 
             var currentSize = await assetStatsRepository.GetTotalSizeAsync(AppId);
 
@@ -308,6 +333,14 @@ namespace Squidex.Areas.Api.Controllers.Assets
             }
 
             return file.ToAssetFile();
+        }
+
+        private Q CreateQuery(string? ids, string? q)
+        {
+            return Q.Empty
+                .WithIds(ids)
+                .WithJsonQuery(q)
+                .WithODataQuery(Request.QueryString.ToString());
         }
     }
 }

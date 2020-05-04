@@ -1,5 +1,6 @@
 const webpack = require('webpack'),
-         path = require('path');
+         path = require('path'),
+           fs = require('fs');
 
 const appRoot = path.resolve(__dirname, '..');
 
@@ -40,6 +41,7 @@ module.exports = function (env) {
     const isTests = env && env.target === 'tests';
     const isTestCoverage = env && env.coverage;
     const isAnalyzing = isProduction && env.analyze;
+    const isAot = !isDevServer;
 
     const configFile = isTests ? 'tsconfig.spec.json' : 'tsconfig.app.json';
 
@@ -168,7 +170,6 @@ module.exports = function (env) {
 
         plugins: [
             new webpack.ContextReplacementPlugin(/\@angular(\\|\/)core(\\|\/)fesm5/, root('./app'), {}),
-            new webpack.ContextReplacementPlugin(/moment[\/\\]locale$/, /en/),
 
             /**
              * Puts each bundle into a file and appends the hash of the file to the path.
@@ -209,7 +210,7 @@ module.exports = function (env) {
             headers: {
                 'Access-Control-Allow-Origin': '*'
             },
-            historyApiFallback: true
+            historyApiFallback: true,
         }
     };
 
@@ -256,7 +257,7 @@ module.exports = function (env) {
                 /**
                  * Set the public path, because we are running the website from another port (5000).
                  */
-                publicPath: 'http://localhost:3000/'
+                publicPath: 'https://localhost:3000/'
             };
         }
 
@@ -271,7 +272,11 @@ module.exports = function (env) {
 
         config.plugins.push(
             new plugins.HtmlWebpackPlugin({
-                template: 'app/_theme.html', hash: true, chunksSortMode: 'none', filename: 'theme.html'
+                filename: 'theme.html',
+                hash: true, 
+                chunks: [],
+                chunksSortMode: 'none', 
+                template: 'app/_theme.html'
             })
         );
 
@@ -295,8 +300,8 @@ module.exports = function (env) {
             new plugins.NgToolsWebpack.AngularCompilerPlugin({
                 directTemplateLoading: true,
                 entryModule: 'app/app.module#AppModule',
+                skipCodeGeneration: !isAot,
                 sourceMap: !isProduction,
-                skipCodeGeneration: false,
                 tsConfigPath: configFile
             })
         );

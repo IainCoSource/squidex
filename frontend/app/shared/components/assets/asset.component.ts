@@ -6,16 +6,7 @@
  */
 
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, HostBinding, Input, OnInit, Output } from '@angular/core';
-
-import {
-    AssetDto,
-    AssetsState,
-    AssetUploaderState,
-    DialogModel,
-    DialogService,
-    Types,
-    UploadCanceled
-} from '@app/shared/internal';
+import { AssetDto, AssetsState, AssetUploaderState, DialogModel, DialogService, Types, UploadCanceled } from '@app/shared/internal';
 
 @Component({
     selector: 'sqx-asset',
@@ -105,22 +96,27 @@ export class AssetComponent implements OnInit {
 
     public updateFile(files: FileList) {
         if (files.length === 1 && this.asset.canUpload) {
-            this.setProgress(1);
+            this.dialogs.confirm('Replace asset?', `Do you really want to replace asset **${this.asset.fileName}** with a newer version`)
+                .subscribe(confirmed => {
+                    if (confirmed) {
+                        this.setProgress(1);
 
-            this.assetUploader.uploadAsset(this.asset, files[0])
-                .subscribe(asset => {
-                    if (Types.isNumber(asset)) {
-                        this.setProgress(asset);
-                    } else {
-                        this.setProgress(0);
-                        this.setAsset(asset);
+                        this.assetUploader.uploadAsset(this.asset, files[0])
+                            .subscribe(asset => {
+                                if (Types.isNumber(asset)) {
+                                    this.setProgress(asset);
+                                } else {
+                                    this.setProgress(0);
+                                    this.setAsset(asset);
+                                }
+                            }, error => {
+                                this.dialogs.notifyError(error);
+
+                                this.setProgress(0);
+                            }, () => {
+                                this.setProgress(0);
+                            });
                     }
-                }, error => {
-                    this.dialogs.notifyError(error);
-
-                    this.setProgress(0);
-                }, () => {
-                    this.setProgress(0);
                 });
         }
     }

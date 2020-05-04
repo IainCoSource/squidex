@@ -6,10 +6,8 @@
  */
 
 import { Mock, Times } from 'typemoq';
-
-import { Pager } from './pager';
-
 import { LocalStoreService } from './../services/local-store.service';
+import { Pager } from './pager';
 
 describe('Pager', () => {
     it('should init with default values', () => {
@@ -235,5 +233,7 @@ describe('Pager', () => {
         pager.saveTo('my', localStore.object);
 
         localStore.verify(x => x.setInt('my.pageSize', 25), Times.once());
+
+        expect().nothing();
     });
 });

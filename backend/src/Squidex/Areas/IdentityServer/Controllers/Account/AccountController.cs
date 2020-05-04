@@ -9,7 +9,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Security;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
@@ -25,7 +24,7 @@ using Squidex.Config;
 using Squidex.Domain.Users;
 using Squidex.Infrastructure;
 using Squidex.Infrastructure.Log;
-using Squidex.Infrastructure.Tasks;
+using Squidex.Infrastructure.Security;
 using Squidex.Shared;
 using Squidex.Shared.Identity;
 using Squidex.Shared.Users;
@@ -39,6 +38,7 @@ namespace Squidex.Areas.IdentityServer.Controllers.Account
         private readonly UserManager<IdentityUser> userManager;
         private readonly IUserFactory userFactory;
         private readonly IUserEvents userEvents;
+        private readonly UrlsOptions urlsOptions;
         private readonly MyIdentityOptions identityOptions;
         private readonly ISemanticLog log;
         private readonly IIdentityServerInteractionService interactions;
@@ -48,17 +48,19 @@ namespace Squidex.Areas.IdentityServer.Controllers.Account
             UserManager<IdentityUser> userManager,
             IUserFactory userFactory,
             IUserEvents userEvents,
+            IOptions<UrlsOptions> urlsOptions,
             IOptions<MyIdentityOptions> identityOptions,
             ISemanticLog log,
             IIdentityServerInteractionService interactions)
         {
-            this.log = log;
-            this.userEvents = userEvents;
-            this.userManager = userManager;
-            this.userFactory = userFactory;
-            this.interactions = interactions;
             this.identityOptions = identityOptions.Value;
+            this.interactions = interactions;
             this.signInManager = signInManager;
+            this.urlsOptions = urlsOptions.Value;
+            this.userEvents = userEvents;
+            this.userFactory = userFactory;
+            this.userManager = userManager;
+            this.log = log;
         }
 
         [HttpGet]
@@ -72,7 +74,7 @@ namespace Squidex.Areas.IdentityServer.Controllers.Account
         [Route("account/forbidden/")]
         public IActionResult Forbidden()
         {
-            throw new SecurityException("User is not allowed to login.");
+            throw new DomainForbiddenException("User is not allowed to login.");
         }
 
         [HttpGet]
@@ -352,7 +354,7 @@ namespace Squidex.Areas.IdentityServer.Controllers.Account
         {
             if (isFirst || !identityOptions.LockAutomatically)
             {
-                return TaskHelper.True;
+                return Task.FromResult(true);
             }
 
             return MakeIdentityOperation(() => userManager.SetLockoutEndDateAsync(user.Identity, DateTimeOffset.UtcNow.AddYears(100)));
@@ -360,36 +362,27 @@ namespace Squidex.Areas.IdentityServer.Controllers.Account
 
         private Task<bool> AddClaimsAsync(UserWithClaims user, ExternalLoginInfo externalLogin, string email, bool isFirst = false)
         {
-            var newClaims = new List<Claim>();
-
-            void AddClaim(Claim claim)
+            var update = new UserValues
             {
-                newClaims.Add(claim);
-
-                user.Claims.Add(claim);
-            }
-
-            foreach (var squidexClaim in externalLogin.Principal.GetSquidexClaims())
-            {
-                AddClaim(squidexClaim);
-            }
+                CustomClaims = externalLogin.Principal.GetSquidexClaims().ToList()
+            };
 
             if (!user.HasPictureUrl())
             {
-                AddClaim(new Claim(SquidexClaimTypes.PictureUrl, GravatarHelper.CreatePictureUrl(email)));
+                update.PictureUrl = GravatarHelper.CreatePictureUrl(email);
             }
 
             if (!user.HasDisplayName())
             {
-                AddClaim(new Claim(SquidexClaimTypes.DisplayName, email));
+                update.DisplayName = email;
             }
 
             if (isFirst)
             {
-                AddClaim(new Claim(SquidexClaimTypes.Permissions, Permissions.Admin));
+                update.Permissions = new PermissionSet(Permissions.Admin);
             }
 
-            return MakeIdentityOperation(() => userManager.SyncClaimsAsync(user.Identity, newClaims));
+            return MakeIdentityOperation(() => userManager.SyncClaims(user.Identity, update));
         }
 
         private IActionResult RedirectToLogoutUrl(LogoutRequest context)
@@ -406,7 +399,7 @@ namespace Squidex.Areas.IdentityServer.Controllers.Account
 
         private IActionResult RedirectToReturnUrl(string? returnUrl)
         {
-            if (!string.IsNullOrWhiteSpace(returnUrl))
+            if (urlsOptions.IsAllowedHost(returnUrl) || interactions.IsValidReturnUrl(returnUrl))
             {
                 return Redirect(returnUrl);
             }

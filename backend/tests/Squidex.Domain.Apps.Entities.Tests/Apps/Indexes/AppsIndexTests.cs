@@ -71,6 +71,23 @@ namespace Squidex.Domain.Apps.Entities.Apps.Indexes
         }
 
         [Fact]
+        public async Task Should_resolve_combined_apps()
+        {
+            var expected = SetupApp(0, false);
+
+            A.CallTo(() => indexByName.GetIdsAsync(A<string[]>.That.IsSameSequenceAs(new[] { appId.Name })))
+                .Returns(new List<Guid> { appId.Id });
+
+            A.CallTo(() => indexByUser.GetIdsAsync())
+                .Returns(new List<Guid> { appId.Id });
+
+            var actual = await sut.GetAppsForUserAsync(userId, new PermissionSet($"squidex.apps.{appId.Name}"));
+
+            Assert.Single(actual);
+            Assert.Same(expected, actual[0]);
+        }
+
+        [Fact]
         public async Task Should_resolve_all_apps()
         {
             var expected = SetupApp(0, false);
@@ -143,7 +160,7 @@ namespace Squidex.Domain.Apps.Entities.Apps.Indexes
             A.CallTo(() => indexByName.AddAsync(token))
                 .MustHaveHappened();
 
-            A.CallTo(() => indexByName.RemoveReservationAsync(A<string>.Ignored))
+            A.CallTo(() => indexByName.RemoveReservationAsync(A<string>._))
                 .MustNotHaveHappened();
 
             A.CallTo(() => indexByUser.AddAsync(appId.Id))
@@ -167,7 +184,7 @@ namespace Squidex.Domain.Apps.Entities.Apps.Indexes
             A.CallTo(() => indexByName.AddAsync(token))
                 .MustHaveHappened();
 
-            A.CallTo(() => indexByName.RemoveReservationAsync(A<string>.Ignored))
+            A.CallTo(() => indexByName.RemoveReservationAsync(A<string>._))
                 .MustNotHaveHappened();
 
             A.CallTo(() => indexByUser.AddAsync(appId.Id))
@@ -209,10 +226,10 @@ namespace Squidex.Domain.Apps.Entities.Apps.Indexes
 
             await Assert.ThrowsAsync<ValidationException>(() => sut.HandleAsync(context));
 
-            A.CallTo(() => indexByName.AddAsync(A<string>.Ignored))
+            A.CallTo(() => indexByName.AddAsync(A<string>._))
                 .MustNotHaveHappened();
 
-            A.CallTo(() => indexByName.RemoveReservationAsync(A<string>.Ignored))
+            A.CallTo(() => indexByName.RemoveReservationAsync(A<string>._))
                 .MustNotHaveHappened();
 
             A.CallTo(() => indexByUser.AddAsync(appId.Id))
@@ -228,10 +245,10 @@ namespace Squidex.Domain.Apps.Entities.Apps.Indexes
 
             await sut.HandleAsync(context);
 
-            A.CallTo(() => indexByName.ReserveAsync(appId.Id, A<string>.Ignored))
+            A.CallTo(() => indexByName.ReserveAsync(appId.Id, A<string>._))
                 .MustNotHaveHappened();
 
-            A.CallTo(() => indexByName.RemoveReservationAsync(A<string>.Ignored))
+            A.CallTo(() => indexByName.RemoveReservationAsync(A<string>._))
                 .MustNotHaveHappened();
 
             A.CallTo(() => indexByUser.AddAsync(appId.Id))

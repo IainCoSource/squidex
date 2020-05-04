@@ -6,21 +6,9 @@
  */
 
 import { Injectable } from '@angular/core';
+import { DialogService, ErrorDto, LocalStoreService, Pager, shareSubscribed, State, Types, Version, Versioned } from '@app/framework';
 import { empty, forkJoin, Observable, of } from 'rxjs';
 import { catchError, finalize, switchMap, tap } from 'rxjs/operators';
-
-import {
-    DialogService,
-    ErrorDto,
-    LocalStoreService,
-    Pager,
-    shareSubscribed,
-    State,
-    Types,
-    Version,
-    Versioned
-} from '@app/framework';
-
 import { ContentDto, ContentsService, StatusInfo } from './../services/contents.service';
 import { SchemaDto } from './../services/schemas.service';
 import { AppsState } from './apps.state';
@@ -60,7 +48,7 @@ interface Snapshot {
 export abstract class ContentsStateBase extends State<Snapshot> {
     private previousId: string;
 
-    public selectedContent =
+    public selectedContent: Observable<ContentDto | null | undefined> =
         this.project(x => x.selectedContent, Types.equals);
 
     public contents =
@@ -164,10 +152,16 @@ export abstract class ContentsStateBase extends State<Snapshot> {
 
         this.previousId = this.schemaId;
 
-        return this.contentsService.getContents(this.appName, this.schemaId,
-                this.snapshot.contentsPager.pageSize,
-                this.snapshot.contentsPager.skip,
-                this.snapshot.contentsQuery, undefined).pipe(
+        const query: any = {
+             take: this.snapshot.contentsPager.pageSize,
+             skip: this.snapshot.contentsPager.skip
+        };
+
+        if (this.snapshot.contentsQuery) {
+            query.query = this.snapshot.contentsQuery;
+        }
+
+        return this.contentsService.getContents(this.appName, this.schemaId, query).pipe(
             tap(({ total, items: contents, canCreate, canCreateAndPublish, statuses }) => {
                 if (isReload) {
                     this.dialogs.notifyInfo('Contents reloaded.');
@@ -257,14 +251,6 @@ export abstract class ContentsStateBase extends State<Snapshot> {
             shareSubscribed(this.dialogs, { silent: true }));
     }
 
-    public publishDraft(content: ContentDto, dueTime: string | null): Observable<ContentDto> {
-        return this.contentsService.publishDraft(this.appName, content, dueTime, content.version).pipe(
-            tap(updated => {
-                this.replaceContent(updated, content.version, 'Content updated successfully.');
-            }),
-            shareSubscribed(this.dialogs));
-    }
-
     public changeStatus(content: ContentDto, status: string, dueTime: string | null): Observable<ContentDto> {
         return this.contentsService.putStatus(this.appName, content, status, dueTime, content.version).pipe(
             tap(updated => {
@@ -281,16 +267,16 @@ export abstract class ContentsStateBase extends State<Snapshot> {
             shareSubscribed(this.dialogs, { silent: true }));
     }
 
-    public proposeDraft(content: ContentDto, request: any): Observable<ContentDto> {
-        return this.contentsService.proposeDraft(this.appName, content, request, content.version).pipe(
+    public createDraft(content: ContentDto): Observable<ContentDto> {
+        return this.contentsService.createVersion(this.appName, content, content.version).pipe(
             tap(updated => {
                 this.replaceContent(updated, content.version, 'Content updated successfully.');
             }),
             shareSubscribed(this.dialogs, { silent: true }));
     }
 
-    public discardDraft(content: ContentDto): Observable<ContentDto> {
-        return this.contentsService.discardDraft(this.appName, content, content.version).pipe(
+    public deleteDraft(content: ContentDto): Observable<ContentDto> {
+        return this.contentsService.deleteVersion(this.appName, content, content.version).pipe(
             tap(updated => {
                 this.replaceContent(updated, content.version, 'Content updated successfully.');
             }),
@@ -372,7 +358,7 @@ export class ManualContentsState extends ContentsStateBase {
 }
 
 function buildStatusQueries(statuses: ReadonlyArray<StatusInfo> | undefined): ReadonlyArray<SavedQuery> {
-    return statuses ? statuses.map(s => buildStatusQuery(s)) : [];
+    return statuses?.map(s => buildStatusQuery(s)) || [];
 }
 
 function buildStatusQuery(s: StatusInfo) {

@@ -7,22 +7,7 @@
 
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { inject, TestBed } from '@angular/core/testing';
-
-import {
-    AnalyticsService,
-    ApiUrlConfig,
-    DateTime,
-    Resource,
-    ResourceLinks,
-    RuleDto,
-    RuleElementDto,
-    RuleElementPropertyDto,
-    RuleEventDto,
-    RuleEventsDto,
-    RulesDto,
-    RulesService,
-    Version
-} from '@app/shared/internal';
+import { AnalyticsService, ApiUrlConfig, DateTime, Resource, ResourceLinks, RuleDto, RuleElementDto, RuleElementPropertyDto, RuleEventDto, RuleEventsDto, RulesDto, RulesService, Version } from '@app/shared/internal';
 
 describe('RulesService', () => {
     const version = new Version('1');
@@ -124,14 +109,15 @@ describe('RulesService', () => {
             items: [
                 ruleResponse(12),
                 ruleResponse(13)
-            ]
+            ],
+            runningRuleId: '12'
         });
 
         expect(rules!).toEqual(
             new RulesDto([
                 createRule(12),
                 createRule(13)
-            ]));
+            ], {}, '12'));
     }));
 
     it('should make post request to create rule',
@@ -288,6 +274,38 @@ describe('RulesService', () => {
         req.flush({});
     }));
 
+    it('should make put request to run rule',
+        inject([RulesService, HttpTestingController], (rulesService: RulesService, httpMock: HttpTestingController) => {
+
+        const resource: Resource = {
+            _links: {
+                run: { method: 'PUT', href: '/api/apps/my-app/rules/123/run' }
+            }
+        };
+
+        rulesService.runRule('my-app', resource).subscribe();
+
+        const req = httpMock.expectOne('http://service/p/api/apps/my-app/rules/123/run');
+
+        expect(req.request.method).toEqual('PUT');
+        expect(req.request.headers.get('If-Match')).toBeNull();
+
+        req.flush({});
+    }));
+
+    it('should make delete request to cancel run rule',
+        inject([RulesService, HttpTestingController], (rulesService: RulesService, httpMock: HttpTestingController) => {
+
+        rulesService.runCancel('my-app').subscribe();
+
+        const req = httpMock.expectOne('http://service/p/api/apps/my-app/rules/run');
+
+        expect(req.request.method).toEqual('DELETE');
+        expect(req.request.headers.get('If-Match')).toBeNull();
+
+        req.flush({});
+    }));
+
     it('should make get request to get app rule events',
         inject([RulesService, HttpTestingController], (rulesService: RulesService, httpMock: HttpTestingController) => {
 
@@ -357,7 +375,7 @@ describe('RulesService', () => {
     function ruleEventResponse(id: number, suffix = '') {
         return {
             id: `id${id}`,
-            created: `${id % 1000 + 2000}-12-12T10:10:00`,
+            created: `${id % 1000 + 2000}-12-12T10:10:00Z`,
             eventName: `event${id}${suffix}`,
             nextAttempt: `${id % 1000 + 2000}-11-11T10:10`,
             jobResult: `Failed${id}${suffix}`,
@@ -381,7 +399,7 @@ describe('RulesService', () => {
             name: `Name${id}${suffix}`,
             numSucceeded: id * 3,
             numFailed: id * 4,
-            lastExecuted: `${id % 1000 + 2000}-10-10T10:10:00`,
+            lastExecuted: `${id % 1000 + 2000}-10-10T10:10:00Z`,
             isEnabled: id % 2 === 0,
             trigger: {
                 param1: 1,
@@ -407,8 +425,8 @@ export function createRuleEvent(id: number, suffix = '') {
     };
 
     return new RuleEventDto(links, `id${id}`,
-        DateTime.parseISO_UTC(`${id % 1000 + 2000}-12-12T10:10:00`),
-        DateTime.parseISO_UTC(`${id % 1000 + 2000}-11-11T10:10:00`),
+        DateTime.parseISO(`${id % 1000 + 2000}-12-12T10:10:00Z`),
+        DateTime.parseISO(`${id % 1000 + 2000}-11-11T10:10:00Z`),
         `event${id}${suffix}`,
         `url${id}${suffix}`,
         `dump${id}${suffix}`,
@@ -424,8 +442,8 @@ export function createRule(id: number, suffix = '') {
 
     return new RuleDto(links,
         `id${id}`,
-        DateTime.parseISO_UTC(`${id % 1000 + 2000}-12-12T10:10:00`), `creator${id}`,
-        DateTime.parseISO_UTC(`${id % 1000 + 2000}-11-11T10:10:00`), `modifier${id}`,
+        DateTime.parseISO(`${id % 1000 + 2000}-12-12T10:10:00Z`), `creator${id}`,
+        DateTime.parseISO(`${id % 1000 + 2000}-11-11T10:10:00Z`), `modifier${id}`,
         new Version(`${id}${suffix}`),
         id % 2 === 0,
         {
@@ -443,5 +461,5 @@ export function createRule(id: number, suffix = '') {
         `Name${id}${suffix}`,
         id * 3,
         id * 4,
-        DateTime.parseISO_UTC(`${id % 1000 + 2000}-10-10T10:10:00`));
+        DateTime.parseISO(`${id % 1000 + 2000}-10-10T10:10:00Z`));
 }

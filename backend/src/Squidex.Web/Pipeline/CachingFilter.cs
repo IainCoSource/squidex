@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using Squidex.Infrastructure;
+using Squidex.Infrastructure.Security;
 
 namespace Squidex.Web.Pipeline
 {
@@ -32,31 +33,60 @@ namespace Squidex.Web.Pipeline
 
         public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
-            var httpContext = context.HttpContext;
+            cachingManager.Start(context.HttpContext);
 
-            cachingManager.Start(httpContext);
+            AppendAuthHeaders(context.HttpContext);
 
             var resultContext = await next();
 
-            cachingManager.Finish(httpContext, cachingOptions.MaxSurrogateKeys);
-
-            if (httpContext.Response.Headers.TryGetString(HeaderNames.ETag, out var etag))
+            if (resultContext.HttpContext.Response.Headers.TryGetString(HeaderNames.ETag, out var etag))
             {
-                if (!cachingOptions.StrongETag && !etag.StartsWith("W/", StringComparison.OrdinalIgnoreCase))
+                if (!cachingOptions.StrongETag && IsWeakEtag(etag))
                 {
-                    etag = $"W/{etag}";
+                    etag = ToWeakEtag(etag);
 
-                    httpContext.Response.Headers[HeaderNames.ETag] = etag;
+                    resultContext.HttpContext.Response.Headers[HeaderNames.ETag] = etag;
                 }
 
-                if (HttpMethods.IsGet(httpContext.Request.Method) &&
-                    httpContext.Response.StatusCode == 200 &&
-                    httpContext.Request.Headers.TryGetString(HeaderNames.IfNoneMatch, out var noneMatch) &&
-                    string.Equals(etag, noneMatch, StringComparison.Ordinal))
+                if (IsCacheable(resultContext.HttpContext, etag))
                 {
                     resultContext.Result = new StatusCodeResult(304);
                 }
             }
+
+            cachingManager.Finish(resultContext.HttpContext);
+        }
+
+        private static bool IsCacheable(HttpContext httpContext, string etag)
+        {
+            return HttpMethods.IsGet(httpContext.Request.Method) &&
+                httpContext.Response.StatusCode == 200 &&
+                httpContext.Request.Headers.TryGetString(HeaderNames.IfNoneMatch, out var noneMatch) &&
+                string.Equals(etag, noneMatch, StringComparison.Ordinal);
+        }
+
+        private void AppendAuthHeaders(HttpContext httpContext)
+        {
+            cachingManager.AddHeader("Auth-State");
+
+            if (!string.IsNullOrWhiteSpace(httpContext.User.OpenIdSubject()))
+            {
+                cachingManager.AddHeader(HeaderNames.Authorization);
+            }
+            else if (!string.IsNullOrWhiteSpace(httpContext.User.OpenIdClientId()))
+            {
+                cachingManager.AddHeader("Auth-ClientId");
+            }
+        }
+
+        private static string ToWeakEtag(string? etag)
+        {
+            return $"W/{etag}";
+        }
+
+        private static bool IsWeakEtag(string etag)
+        {
+            return !etag.StartsWith("W/", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

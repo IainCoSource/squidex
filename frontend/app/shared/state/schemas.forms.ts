@@ -6,23 +6,9 @@
  */
 
 import { FormArray, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { Form, ValidatorsEx, value$ } from '@app/framework';
 import { map } from 'rxjs/operators';
-
-import {
-    Form,
-    ValidatorsEx,
-    value$
-} from '@app/framework';
-
-import {
-    AddFieldDto,
-    CreateSchemaDto,
-    SchemaDetailsDto,
-    SchemaPropertiesDto,
-    SynchronizeSchemaDto,
-    UpdateSchemaDto
-} from './../services/schemas.service';
-
+import { AddFieldDto, CreateSchemaDto, SchemaDetailsDto, SchemaPropertiesDto, SynchronizeSchemaDto, UpdateSchemaDto } from './../services/schemas.service';
 import { createProperties, FieldPropertiesDto } from './../services/schemas.types';
 
 type CreateCategoryFormType = { name: string };
@@ -46,14 +32,20 @@ export class CreateSchemaForm extends Form<FormGroup, CreateSchemaDto> {
                 ]
             ],
             isSingleton: false,
-            import: {}
+            importing: {}
         }));
     }
 
-    public transformSubmit(value: any) {
-        const result = { ...value.import || {}, name: value.name, isSingleton: value.isSingleton };
+    public transformLoad(value: CreateSchemaDto) {
+        const { name, isSingleton, ...importing } = value;
 
-        return result;
+        return { name, isSingleton, importing };
+    }
+
+    public transformSubmit(value: any): CreateSchemaDto {
+        const { name, isSingleton, importing } = value;
+
+        return { name, isSingleton, ...importing };
     }
 }
 

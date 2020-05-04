@@ -13,8 +13,7 @@ using FakeItEasy;
 using Squidex.Domain.Apps.Core.Apps;
 using Squidex.Domain.Apps.Core.Contents;
 using Squidex.Domain.Apps.Entities.Apps.Commands;
-using Squidex.Domain.Apps.Entities.Apps.Services;
-using Squidex.Domain.Apps.Entities.Apps.Services.Implementations;
+using Squidex.Domain.Apps.Entities.Apps.Plans;
 using Squidex.Domain.Apps.Entities.Apps.State;
 using Squidex.Domain.Apps.Entities.TestHelpers;
 using Squidex.Domain.Apps.Events.Apps;
@@ -88,7 +87,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task Create_should_create_events_and_update_state()
+        public async Task Create_should_create_events_and_set_intitial_state()
         {
             var command = new CreateApp { Name = AppName, AppId = AppId };
 
@@ -127,7 +126,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task Update_should_create_events_and_update_state()
+        public async Task Update_should_create_events_and_update_label_and_description()
         {
             var command = new UpdateApp { Label = "my-label", Description = "my-description" };
 
@@ -147,7 +146,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task UploadImage_should_create_events_and_update_state()
+        public async Task UploadImage_should_create_events_and_update_image()
         {
             var command = new UploadAppImage { File = new AssetFile("image.png", "image/png", 100, () => new MemoryStream()) };
 
@@ -166,7 +165,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task RemoveImage_should_create_events_and_update_state()
+        public async Task RemoveImage_should_create_events_and_update_image()
         {
             var command = new RemoveAppImage();
 
@@ -186,7 +185,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task ChangePlan_should_create_events_and_update_state()
+        public async Task ChangePlan_should_create_events_and_update_plan()
         {
             var command = new ChangePlan { PlanId = planIdPaid };
 
@@ -208,7 +207,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task ChangePlan_from_callback_should_create_events_and_update_state()
+        public async Task ChangePlan_from_callback_should_create_events_and_update_plan()
         {
             var command = new ChangePlan { PlanId = planIdPaid, FromCallback = true };
 
@@ -225,7 +224,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
                     CreateEvent(new AppPlanChanged { PlanId = planIdPaid })
                 );
 
-            A.CallTo(() => appPlansBillingManager.ChangePlanAsync(A<string>.Ignored, A<NamedId<Guid>>.Ignored, A<string?>.Ignored))
+            A.CallTo(() => appPlansBillingManager.ChangePlanAsync(A<string>._, A<NamedId<Guid>>._, A<string?>._))
                 .MustNotHaveHappened();
         }
 
@@ -251,7 +250,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
                     CreateEvent(new AppPlanReset())
                 );
 
-            A.CallTo(() => appPlansBillingManager.ChangePlanAsync(A<string>.Ignored, A<NamedId<Guid>>.Ignored, planIdFree))
+            A.CallTo(() => appPlansBillingManager.ChangePlanAsync(A<string>._, A<NamedId<Guid>>._, planIdFree))
                 .MustNotHaveHappened();
         }
 
@@ -314,7 +313,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task AssignContributor_should_create_events_and_update_state()
+        public async Task AssignContributor_should_create_events_and_add_contributor()
         {
             var command = new AssignContributor { ContributorId = contributorId, Role = Role.Editor };
 
@@ -333,7 +332,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task AssignContributor_should_create_update_events_and_update_state()
+        public async Task AssignContributor_should_create_update_events_and_update_contributor()
         {
             var command = new AssignContributor { ContributorId = contributorId, Role = Role.Owner };
 
@@ -353,7 +352,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task RemoveContributor_should_create_events_and_update_state()
+        public async Task RemoveContributor_should_create_events_and_remove_contributor()
         {
             var command = new RemoveContributor { ContributorId = contributorId };
 
@@ -373,7 +372,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task AttachClient_should_create_events_and_update_state()
+        public async Task AttachClient_should_create_events_and_add_client()
         {
             var command = new AttachClient { Id = clientId };
 
@@ -392,7 +391,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task UpdateClient_should_create_events_and_update_state()
+        public async Task UpdateClient_should_create_events_and_update_client()
         {
             var command = new UpdateClient { Id = clientId, Name = clientNewName, Role = Role.Developer };
 
@@ -413,7 +412,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task RevokeClient_should_create_events_and_update_state()
+        public async Task RevokeClient_should_create_events_and_remove_client()
         {
             var command = new RevokeClient { Id = clientId };
 
@@ -433,7 +432,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task AddWorkflow_should_create_events_and_update_state()
+        public async Task AddWorkflow_should_create_events_and_add_workflow()
         {
             var command = new AddWorkflow { WorkflowId = workflowId, Name = "my-workflow" };
 
@@ -452,7 +451,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task UpdateWorkflow_should_create_events_and_update_state()
+        public async Task UpdateWorkflow_should_create_events_and_update_workflow()
         {
             var command = new UpdateWorkflow { WorkflowId = workflowId, Workflow = Workflow.Default };
 
@@ -472,7 +471,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task DeleteWorkflow_should_create_events_and_update_state()
+        public async Task DeleteWorkflow_should_create_events_and_remove_workflow()
         {
             var command = new DeleteWorkflow { WorkflowId = workflowId };
 
@@ -492,7 +491,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task AddLanguage_should_create_events_and_update_state()
+        public async Task AddLanguage_should_create_events_and_add_language()
         {
             var command = new AddLanguage { Language = Language.DE };
 
@@ -511,7 +510,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task RemoveLanguage_should_create_events_and_update_state()
+        public async Task RemoveLanguage_should_create_events_and_remove_language()
         {
             var command = new RemoveLanguage { Language = Language.DE };
 
@@ -531,7 +530,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task UpdateLanguage_should_create_events_and_update_state()
+        public async Task UpdateLanguage_should_create_events_and_update_language()
         {
             var command = new UpdateLanguage { Language = Language.DE, Fallback = new List<Language> { Language.EN } };
 
@@ -551,7 +550,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task AddRole_should_create_events_and_update_state()
+        public async Task AddRole_should_create_events_and_add_role()
         {
             var command = new AddRole { Name = roleName };
 
@@ -570,7 +569,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task DeleteRole_should_create_events_and_update_state()
+        public async Task DeleteRole_should_create_events_and_delete_role()
         {
             var command = new DeleteRole { Name = roleName };
 
@@ -590,7 +589,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task UpdateRole_should_create_events_and_update_state()
+        public async Task UpdateRole_should_create_events_and_update_role()
         {
             var command = new UpdateRole { Name = roleName, Permissions = new[] { "clients.read" } };
 
@@ -608,7 +607,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task AddPattern_should_create_events_and_update_state()
+        public async Task AddPattern_should_create_events_and_add_pattern()
         {
             var command = new AddPattern { PatternId = patternId3, Name = "Any", Pattern = ".*", Message = "Msg" };
 
@@ -627,7 +626,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task DeletePattern_should_create_events_and_update_state()
+        public async Task DeletePattern_should_create_events_and_update_pattern()
         {
             var command = new DeletePattern { PatternId = patternId3 };
 
@@ -647,7 +646,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task UpdatePattern_should_create_events_and_update_state()
+        public async Task UpdatePattern_should_create_events_and_remove_pattern()
         {
             var command = new UpdatePattern { PatternId = patternId3, Name = "Any", Pattern = ".*", Message = "Msg" };
 
@@ -665,7 +664,7 @@ namespace Squidex.Domain.Apps.Entities.Apps
         }
 
         [Fact]
-        public async Task ArchiveApp_should_create_events_and_update_state()
+        public async Task ArchiveApp_should_create_events_and_update_archived_flag()
         {
             var command = new ArchiveApp();
 
@@ -674,6 +673,8 @@ namespace Squidex.Domain.Apps.Entities.Apps
             var result = await PublishAsync(command);
 
             result.ShouldBeEquivalent(new EntitySavedResult(4));
+
+            Assert.True(sut.Snapshot.IsArchived);
 
             LastEvents
                 .ShouldHaveSameEvents(

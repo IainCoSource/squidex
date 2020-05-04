@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using Squidex.Domain.Apps.Core.Contents;
@@ -17,6 +18,7 @@ using Squidex.Domain.Apps.Core.Scripting;
 using Squidex.Infrastructure;
 using Squidex.Infrastructure.Json;
 using Squidex.Infrastructure.Json.Objects;
+using Squidex.Shared.Identity;
 using Squidex.Shared.Users;
 
 namespace Squidex.Domain.Apps.Core.HandleRules
@@ -26,16 +28,14 @@ namespace Squidex.Domain.Apps.Core.HandleRules
         private const string Fallback = "null";
         private const string ScriptSuffix = ")";
         private const string ScriptPrefix = "Script(";
-        private static readonly char[] ContentPlaceholderStartOld = "CONTENT_DATA".ToCharArray();
-        private static readonly char[] ContentPlaceholderStartNew = "{CONTENT_DATA".ToCharArray();
-        private static readonly Regex ContentDataPlaceholderOld = new Regex(@"^CONTENT_DATA(\.([0-9A-Za-z\-_]*)){2,}", RegexOptions.Compiled);
-        private static readonly Regex ContentDataPlaceholderNew = new Regex(@"^\{CONTENT_DATA(\.([0-9A-Za-z\-_]*)){2,}\}", RegexOptions.Compiled);
-        private readonly List<(char[] Pattern, Func<EnrichedEvent, string> Replacer)> patterns = new List<(char[] Pattern, Func<EnrichedEvent, string> Replacer)>();
+        private static readonly Regex RegexPatternOld = new Regex(@"^(?<Type>[^_]*)_(?<Path>[^\s]*)", RegexOptions.Compiled);
+        private static readonly Regex RegexPatternNew = new Regex(@"^\{(?<Type>[^_]*)_(?<Path>[^\s]*)\}", RegexOptions.Compiled);
+        private readonly List<(char[] Pattern, Func<EnrichedEvent, string?> Replacer)> patterns = new List<(char[] Pattern, Func<EnrichedEvent, string?> Replacer)>();
         private readonly IJsonSerializer jsonSerializer;
-        private readonly IRuleUrlGenerator urlGenerator;
+        private readonly IUrlGenerator urlGenerator;
         private readonly IScriptEngine scriptEngine;
 
-        public RuleEventFormatter(IJsonSerializer jsonSerializer, IRuleUrlGenerator urlGenerator, IScriptEngine scriptEngine)
+        public RuleEventFormatter(IJsonSerializer jsonSerializer, IUrlGenerator urlGenerator, IScriptEngine scriptEngine)
         {
             Guard.NotNull(jsonSerializer);
             Guard.NotNull(scriptEngine);
@@ -47,8 +47,8 @@ namespace Squidex.Domain.Apps.Core.HandleRules
 
             AddPattern("APP_ID", AppId);
             AddPattern("APP_NAME", AppName);
+            AddPattern("ASSET_CONTENT_URL", AssetContentUrl);
             AddPattern("CONTENT_ACTION", ContentAction);
-            AddPattern("CONTENT_STATUS", ContentStatus);
             AddPattern("CONTENT_URL", ContentUrl);
             AddPattern("MENTIONED_ID", MentionedId);
             AddPattern("MENTIONED_NAME", MentionedName);
@@ -62,7 +62,7 @@ namespace Squidex.Domain.Apps.Core.HandleRules
             AddPattern("USER_EMAIL", UserEmail);
         }
 
-        private void AddPattern(string placeholder, Func<EnrichedEvent, string> generator)
+        private void AddPattern(string placeholder, Func<EnrichedEvent, string?> generator)
         {
             patterns.Add((placeholder.ToCharArray(), generator));
         }
@@ -90,21 +90,17 @@ namespace Squidex.Domain.Apps.Core.HandleRules
             {
                 var script = trimmed.Substring(ScriptPrefix.Length, trimmed.Length - ScriptPrefix.Length - ScriptSuffix.Length);
 
-                var customFunctions = new Dictionary<string, Func<string>>
+                var context = new ScriptContext
                 {
-                    ["contentUrl"] = () => ContentUrl(@event),
-                    ["contentAction"] = () => ContentAction(@event)
+                    ["event"] = @event
                 };
 
-                return scriptEngine.Interpolate("event", @event, script, customFunctions);
+                return scriptEngine.Interpolate(context, script);
             }
 
             var current = text.AsSpan();
 
             var sb = new StringBuilder();
-
-            var cp2 = new ReadOnlySpan<char>(ContentPlaceholderStartNew);
-            var cp1 = new ReadOnlySpan<char>(ContentPlaceholderStartOld);
 
             for (var i = 0; i < current.Length; i++)
             {
@@ -116,50 +112,14 @@ namespace Squidex.Domain.Apps.Core.HandleRules
 
                     current = current.Slice(i);
 
-                    var test = current.Slice(1);
-                    var tested = false;
+                    var (replacement, length) = GetReplacement(current.Slice(1), @event);
 
-                    for (var j = 0; j < patterns.Count; j++)
+                    if (length > 0)
                     {
-                        var (pattern, replacer) = patterns[j];
+                        sb.Append(replacement);
 
-                        if (test.StartsWith(pattern, StringComparison.OrdinalIgnoreCase))
-                        {
-                            sb.Append(replacer(@event));
-
-                            current = current.Slice(pattern.Length + 1);
-                            i = 0;
-
-                            tested = true;
-                            break;
-                        }
-                    }
-
-                    if (!tested && (test.StartsWith(cp1, StringComparison.OrdinalIgnoreCase) || test.StartsWith(cp2, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        var currentString = test.ToString();
-
-                        var match = ContentDataPlaceholderOld.Match(currentString);
-
-                        if (!match.Success)
-                        {
-                            match = ContentDataPlaceholderNew.Match(currentString);
-                        }
-
-                        if (match.Success)
-                        {
-                            if (@event is EnrichedContentEvent contentEvent)
-                            {
-                                sb.Append(CalculateData(contentEvent.Data, match));
-                            }
-                            else
-                            {
-                                sb.Append(Fallback);
-                            }
-
-                            current = current.Slice(match.Length + 1);
-                            i = 0;
-                        }
+                        current = current.Slice(length + 1);
+                        i = 0;
                     }
                 }
             }
@@ -167,6 +127,37 @@ namespace Squidex.Domain.Apps.Core.HandleRules
             sb.Append(current.ToString());
 
             return sb.ToString();
+        }
+
+        private (string Result, int Length) GetReplacement(ReadOnlySpan<char> test, EnrichedEvent @event)
+        {
+            for (var j = 0; j < patterns.Count; j++)
+            {
+                var (pattern, replacer) = patterns[j];
+
+                if (test.StartsWith(pattern, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (replacer(@event) ?? Fallback, pattern.Length);
+                }
+            }
+
+            var currentString = test.ToString();
+
+            var match = RegexPatternNew.Match(currentString);
+
+            if (!match.Success)
+            {
+                match = RegexPatternOld.Match(currentString);
+            }
+
+            if (match.Success)
+            {
+                var path = match.Groups["Path"].Value.Split('.', StringSplitOptions.RemoveEmptyEntries);
+
+                return (CalculateData(@event, path) ?? Fallback, match.Length);
+            }
+
+            return (Fallback, 0);
         }
 
         private static string TimestampDate(EnrichedEvent @event)
@@ -189,74 +180,74 @@ namespace Squidex.Domain.Apps.Core.HandleRules
             return @event.AppId.Name;
         }
 
-        private static string SchemaId(EnrichedEvent @event)
+        private static string? SchemaId(EnrichedEvent @event)
         {
             if (@event is EnrichedSchemaEventBase schemaEvent)
             {
                 return schemaEvent.SchemaId.Id.ToString();
             }
 
-            return Fallback;
+            return null;
         }
 
-        private static string SchemaName(EnrichedEvent @event)
+        private static string? SchemaName(EnrichedEvent @event)
         {
             if (@event is EnrichedSchemaEventBase schemaEvent)
             {
                 return schemaEvent.SchemaId.Name;
             }
 
-            return Fallback;
+            return null;
         }
 
-        private static string ContentAction(EnrichedEvent @event)
+        private static string? ContentAction(EnrichedEvent @event)
         {
             if (@event is EnrichedContentEvent contentEvent)
             {
                 return contentEvent.Type.ToString();
             }
 
-            return Fallback;
+            return null;
         }
 
-        private static string ContentStatus(EnrichedEvent @event)
+        private string? AssetContentUrl(EnrichedEvent @event)
+        {
+            if (@event is EnrichedAssetEvent assetEvent)
+            {
+                return urlGenerator.AssetContent(assetEvent.Id);
+            }
+
+            return null;
+        }
+
+        private string? ContentUrl(EnrichedEvent @event)
         {
             if (@event is EnrichedContentEvent contentEvent)
             {
-                return contentEvent.Status.ToString();
+                return urlGenerator.ContentUI(contentEvent.AppId, contentEvent.SchemaId, contentEvent.Id);
             }
 
-            return Fallback;
+            return null;
         }
 
-        private string ContentUrl(EnrichedEvent @event)
-        {
-            if (@event is EnrichedContentEvent contentEvent)
-            {
-                return urlGenerator.GenerateContentUIUrl(contentEvent.AppId, contentEvent.SchemaId, contentEvent.Id);
-            }
-
-            return Fallback;
-        }
-
-        private static string UserName(EnrichedEvent @event)
+        private static string? UserName(EnrichedEvent @event)
         {
             if (@event is EnrichedUserEventBase userEvent)
             {
                 return userEvent.User?.DisplayName() ?? Fallback;
             }
 
-            return Fallback;
+            return null;
         }
 
-        private static string UserId(EnrichedEvent @event)
+        private static string? UserId(EnrichedEvent @event)
         {
             if (@event is EnrichedUserEventBase userEvent)
             {
                 return userEvent.User?.Id ?? Fallback;
             }
 
-            return Fallback;
+            return null;
         }
 
         private static string UserEmail(EnrichedEvent @event)
@@ -299,36 +290,81 @@ namespace Squidex.Domain.Apps.Core.HandleRules
             return Fallback;
         }
 
-        private static string CalculateData(NamedContentData data, Match match)
+        private static string? CalculateData(object @event, string[] path)
         {
-            var captures = match.Groups[2].Captures;
+            object? current = @event;
 
-            var path = new string[captures.Count];
-
-            for (var i = 0; i < path.Length; i++)
+            foreach (var segment in path)
             {
-                path[i] = captures[i].Value;
-            }
-
-            if (!data.TryGetValue(path[0], out var field) || field == null)
-            {
-                return Fallback;
-            }
-
-            if (!field.TryGetValue(path[1], out var value))
-            {
-                return Fallback;
-            }
-
-            if (path.Skip(2).Any())
-            {
-                if (!value.TryGetByPath(path.Skip(2), out value) || value == null || value.Type == JsonValueType.Null)
+                if (current is NamedContentData data)
                 {
-                    return Fallback;
+                    if (!data.TryGetValue(segment, out var temp) || temp == null)
+                    {
+                        return null;
+                    }
+
+                    current = temp;
+                }
+                else if (current is ContentFieldData field)
+                {
+                    if (!field.TryGetValue(segment, out var temp) || temp == null)
+                    {
+                        return null;
+                    }
+
+                    current = temp;
+                }
+                else if (current is IJsonValue json)
+                {
+                    if (!json.TryGet(segment, out var temp) || temp == null || temp.Type == JsonValueType.Null)
+                    {
+                        return null;
+                    }
+
+                    current = temp;
+                }
+                else if (current != null)
+                {
+                    if (current is IUser user)
+                    {
+                        var type = segment;
+
+                        if (string.Equals(type, "Name", StringComparison.OrdinalIgnoreCase))
+                        {
+                            type = SquidexClaimTypes.DisplayName;
+                        }
+
+                        var claim = user.Claims.FirstOrDefault(x => string.Equals(x.Type, type, StringComparison.OrdinalIgnoreCase));
+
+                        if (claim != null)
+                        {
+                            current = claim.Value;
+                            continue;
+                        }
+                    }
+
+                    const BindingFlags bindingFlags =
+                        BindingFlags.FlattenHierarchy |
+                        BindingFlags.Public |
+                        BindingFlags.Instance;
+
+                    var properties = current.GetType().GetProperties(bindingFlags);
+                    var property = properties.FirstOrDefault(x => x.CanRead && string.Equals(x.Name, segment, StringComparison.OrdinalIgnoreCase));
+
+                    if (property == null)
+                    {
+                        return null;
+                    }
+
+                    current = property.GetValue(current);
+                }
+                else
+                {
+                    return null;
                 }
             }
 
-            return value.ToString() ?? Fallback;
+            return current?.ToString();
         }
     }
 }

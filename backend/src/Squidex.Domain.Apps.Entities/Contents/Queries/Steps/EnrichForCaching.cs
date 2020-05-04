@@ -24,6 +24,13 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries.Steps
             this.requestCache = requestCache;
         }
 
+        public Task EnrichAsync(Context context)
+        {
+            context.AddCacheHeaders(requestCache);
+
+            return Task.CompletedTask;
+        }
+
         public async Task EnrichAsync(Context context, IEnumerable<ContentEntity> contents, ProvideSchema schemas)
         {
             var app = context.App;

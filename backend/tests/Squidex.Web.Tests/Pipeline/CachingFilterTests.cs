@@ -7,6 +7,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using FakeItEasy;
 using Microsoft.AspNetCore.Http;
@@ -17,6 +18,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Net.Http.Headers;
+using Squidex.Infrastructure.Security;
 using Xunit;
 
 namespace Squidex.Web.Pipeline
@@ -36,7 +38,7 @@ namespace Squidex.Web.Pipeline
             A.CallTo(() => httpContextAccessor.HttpContext)
                 .Returns(httpContext);
 
-            cachingManager = new CachingManager(httpContextAccessor);
+            cachingManager = new CachingManager(httpContextAccessor, Options.Create(cachingOptions));
 
             var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
             var actionFilters = new List<IFilterMetadata>();
@@ -56,6 +58,77 @@ namespace Squidex.Web.Pipeline
             await sut.OnActionExecutionAsync(executingContext, Next());
 
             Assert.Equal(StringValues.Empty, httpContext.Response.Headers[HeaderNames.ETag]);
+        }
+
+        [Fact]
+        public async Task Should_append_authorization_header_as_vary()
+        {
+            await sut.OnActionExecutionAsync(executingContext, Next());
+
+            Assert.Equal("Auth-State", httpContext.Response.Headers[HeaderNames.Vary]);
+        }
+
+        [Fact]
+        public async Task Should_append_authorization_as_header_when_user_has_subject()
+        {
+            var identity = (ClaimsIdentity)httpContext.User.Identity;
+
+            identity.AddClaim(new Claim(OpenIdClaims.Subject, "my-id"));
+
+            await sut.OnActionExecutionAsync(executingContext, Next());
+
+            Assert.Equal("Auth-State,Authorization", httpContext.Response.Headers[HeaderNames.Vary]);
+        }
+
+        [Fact]
+        public async Task Should_append_client_id_as_header_when_user_has_client_but_no_subject()
+        {
+            var identity = (ClaimsIdentity)httpContext.User.Identity;
+
+            identity.AddClaim(new Claim(OpenIdClaims.ClientId, "my-client"));
+
+            await sut.OnActionExecutionAsync(executingContext, Next());
+
+            Assert.Equal("Auth-State,Auth-ClientId", httpContext.Response.Headers[HeaderNames.Vary]);
+        }
+
+        [Fact]
+        public async Task Should_not_append_null_header_as_vary()
+        {
+            await sut.OnActionExecutionAsync(executingContext, () =>
+            {
+                cachingManager.AddHeader(null!);
+
+                return Task.FromResult(executedContext);
+            });
+
+            Assert.Equal("Auth-State", httpContext.Response.Headers[HeaderNames.Vary]);
+        }
+
+        [Fact]
+        public async Task Should_not_append_empty_header_as_vary()
+        {
+            await sut.OnActionExecutionAsync(executingContext, () =>
+            {
+                cachingManager.AddHeader(string.Empty);
+
+                return Task.FromResult(executedContext);
+            });
+
+            Assert.Equal("Auth-State", httpContext.Response.Headers[HeaderNames.Vary]);
+        }
+
+        [Fact]
+        public async Task Should_append_custom_header_as_vary()
+        {
+            await sut.OnActionExecutionAsync(executingContext, () =>
+            {
+                cachingManager.AddHeader("X-Header");
+
+                return Task.FromResult(executedContext);
+            });
+
+            Assert.Equal("Auth-State,X-Header", httpContext.Response.Headers[HeaderNames.Vary]);
         }
 
         [Fact]
@@ -142,7 +215,7 @@ namespace Squidex.Web.Pipeline
             var id1 = Guid.NewGuid();
             var id2 = Guid.NewGuid();
 
-            cachingOptions.MaxSurrogateKeys = 2;
+            cachingOptions.MaxSurrogateKeysSize = 100;
 
             await sut.OnActionExecutionAsync(executingContext, () =>
             {
@@ -156,12 +229,50 @@ namespace Squidex.Web.Pipeline
         }
 
         [Fact]
+        public async Task Should_append_surrogate_keys_if_just_enough_space_for_one()
+        {
+            var id1 = Guid.NewGuid();
+            var id2 = Guid.NewGuid();
+
+            cachingOptions.MaxSurrogateKeysSize = 36;
+
+            await sut.OnActionExecutionAsync(executingContext, () =>
+            {
+                cachingManager.AddDependency(id1, 12);
+                cachingManager.AddDependency(id2, 12);
+
+                return Task.FromResult(executedContext);
+            });
+
+            Assert.Equal($"{id1}", httpContext.Response.Headers["Surrogate-Key"]);
+        }
+
+        [Fact]
         public async Task Should_not_append_surrogate_keys_if_maximum_is_exceeded()
         {
             var id1 = Guid.NewGuid();
             var id2 = Guid.NewGuid();
 
-            cachingOptions.MaxSurrogateKeys = 1;
+            cachingOptions.MaxSurrogateKeysSize = 20;
+
+            await sut.OnActionExecutionAsync(executingContext, () =>
+            {
+                cachingManager.AddDependency(id1, 12);
+                cachingManager.AddDependency(id2, 12);
+
+                return Task.FromResult(executedContext);
+            });
+
+            Assert.Equal(StringValues.Empty, httpContext.Response.Headers["Surrogate-Key"]);
+        }
+
+        [Fact]
+        public async Task Should_not_append_surrogate_keys_if_maximum_is_overriden()
+        {
+            var id1 = Guid.NewGuid();
+            var id2 = Guid.NewGuid();
+
+            httpContext.Request.Headers[CachingManager.SurrogateKeySizeHeader] = "20";
 
             await sut.OnActionExecutionAsync(executingContext, () =>
             {

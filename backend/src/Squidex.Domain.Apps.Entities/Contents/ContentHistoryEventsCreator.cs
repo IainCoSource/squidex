@@ -28,14 +28,11 @@ namespace Squidex.Domain.Apps.Entities.Contents
             AddEventMessage<ContentDeleted>(
                 "deleted {[Schema]} content.");
 
-            AddEventMessage<ContentChangesDiscarded>(
-                "discarded pending changes of {[Schema]} content.");
+            AddEventMessage<ContentDraftCreated>(
+                "created new draft.");
 
-            AddEventMessage<ContentChangesPublished>(
-                "published changes of {[Schema]} content.");
-
-            AddEventMessage<ContentUpdateProposed>(
-                "proposed update for {[Schema]} content.");
+            AddEventMessage<ContentDraftDeleted>(
+                "deleted draft.");
 
             AddEventMessage<ContentSchedulingCancelled>(
                 "failed to schedule status change for {[Schema]} content.");
@@ -55,6 +52,11 @@ namespace Squidex.Domain.Apps.Entities.Contents
 
             if (@event.Payload is SchemaEvent schemaEvent)
             {
+                if (schemaEvent.SchemaId == null)
+                {
+                    return Task.FromResult<HistoryEvent?>(null);
+                }
+
                 result = result.Param("Schema", schemaEvent.SchemaId.Name);
             }
 

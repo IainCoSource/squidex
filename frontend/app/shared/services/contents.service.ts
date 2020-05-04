@@ -7,32 +7,17 @@
 
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
+import { AnalyticsService, ApiUrlConfig, DateTime, hasAnyLink, HTTP, mapVersioned, pretifyError, Resource, ResourceLinks, ResultSet, Version, Versioned } from '@app/framework';
 import { Observable } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
-
-import {
-    AnalyticsService,
-    ApiUrlConfig,
-    DateTime,
-    hasAnyLink,
-    HTTP,
-    mapVersioned,
-    pretifyError,
-    Resource,
-    ResourceLinks,
-    ResultSet,
-    Version,
-    Versioned
-} from '@app/framework';
-
 import { encodeQuery, Query } from './../state/query';
-
 import { parseField, RootFieldDto } from './schemas.service';
 
 export class ScheduleDto {
     constructor(
         public readonly status: string,
         public readonly scheduledBy: string,
+        public readonly color: string,
         public readonly dueTime: DateTime
     ) {
     }
@@ -70,24 +55,22 @@ export class ContentDto {
     public readonly statusUpdates: ReadonlyArray<StatusInfo>;
 
     public readonly canDelete: boolean;
-    public readonly canDraftDiscard: boolean;
-    public readonly canDraftPropose: boolean;
-    public readonly canDraftPublish: boolean;
+    public readonly canDraftDelete: boolean;
+    public readonly canDraftCreate: boolean;
     public readonly canUpdate: boolean;
-    public readonly canUpdateAny: boolean;
 
     constructor(links: ResourceLinks,
         public readonly id: string,
         public readonly status: string,
         public readonly statusColor: string,
+        public readonly newStatus: string | undefined,
+        public readonly newStatusColor: string | undefined,
         public readonly created: DateTime,
         public readonly createdBy: string,
         public readonly lastModified: DateTime,
         public readonly lastModifiedBy: string,
         public readonly scheduleJob: ScheduleDto | null,
-        public readonly isPending: boolean,
-        public readonly data: ContentData | undefined,
-        public readonly dataDraft: ContentData,
+        public readonly data: ContentData,
         public readonly schemaName: string,
         public readonly schemaDisplayName: string,
         public readonly referenceData: ContentReferences,
@@ -97,14 +80,20 @@ export class ContentDto {
         this._links = links;
 
         this.canDelete = hasAnyLink(links, 'delete');
-        this.canDraftDiscard = hasAnyLink(links, 'draft/discard');
-        this.canDraftPropose = hasAnyLink(links, 'draft/propose');
-        this.canDraftPublish = hasAnyLink(links, 'draft/publish');
+        this.canDraftCreate = hasAnyLink(links, 'draft/create');
+        this.canDraftDelete = hasAnyLink(links, 'draft/delete');
         this.canUpdate = hasAnyLink(links, 'update');
-        this.canUpdateAny = this.canUpdate || this.canDraftPropose;
 
         this.statusUpdates = Object.keys(links).filter(x => x.startsWith('status/')).map(x => ({ status: x.substr(7), color: links[x].metadata! }));
     }
+}
+
+export interface ContentQueryDto {
+    readonly ids?: ReadonlyArray<string>;
+    readonly maxLength?: number;
+    readonly query?: Query;
+    readonly skip?: number;
+    readonly take?: number;
 }
 
 @Injectable()
@@ -116,30 +105,36 @@ export class ContentsService {
     ) {
     }
 
-    public getContents(appName: string, schemaName: string, take: number, skip: number, query?: Query, ids?: ReadonlyArray<string>): Observable<ContentsDto> {
+    public getContents(appName: string, schemaName: string, q?: ContentQueryDto): Observable<ContentsDto> {
+        const { ids, maxLength, query, skip, take } = q || {};
+
         const queryParts: string[] = [];
+        const queryOdataParts: string[] = [];
+
+        let queryObj: Query | undefined;
 
         if (ids && ids.length > 0) {
             queryParts.push(`ids=${ids.join(',')}`);
         } else {
-            const queryObj: Query = { ...query };
 
-            if (queryObj.fullText && queryObj.fullText.indexOf('$') >= 0) {
-                queryParts.push(`${queryObj.fullText.trim()}`);
+            if (query && query.fullText && query.fullText.indexOf('$') >= 0) {
+                queryOdataParts.push(`${query.fullText.trim()}`);
 
-                if (take > 0) {
-                    queryParts.push(`$top=${take}`);
+                if (take && take > 0) {
+                    queryOdataParts.push(`$top=${take}`);
                 }
 
-                if (skip > 0) {
-                    queryParts.push(`$skip=${skip}`);
+                if (skip && skip > 0) {
+                    queryOdataParts.push(`$skip=${skip}`);
                 }
             } else {
-                if (take > 0) {
+                queryObj = { ...query };
+
+                if (take && take > 0) {
                     queryObj.take = take;
                 }
 
-                if (skip > 0) {
+                if (skip && skip > 0) {
                     queryObj.skip = skip;
                 }
 
@@ -147,29 +142,70 @@ export class ContentsService {
             }
         }
 
-        const fullQuery = queryParts.join('&');
+        let fullQuery = [...queryParts, ...queryOdataParts].join('&');
 
-        const url = this.apiUrl.buildUrl(`/api/content/${appName}/${schemaName}?${fullQuery}`);
+        if (fullQuery.length > (maxLength || 2000)) {
+            const body: any = {};
 
-        return this.http.get<{ total: number, items: [], statuses: StatusInfo[] } & Resource>(url).pipe(
-            map(({ total, items, statuses, _links }) => {
-                const contents = items.map(x => parseContent(x));
+            if (ids && ids.length > 0) {
+                body.ids = ids;
+            } else {
+                if (queryOdataParts.length > 0) {
+                    body.odataQuery = queryOdataParts.join('&');
+                } else if (queryObj) {
+                    body.q = queryObj;
+                }
+            }
 
-                return new ContentsDto(statuses, total, contents, _links);
-            }),
-            pretifyError('Failed to load contents. Please reload.'));
+            const url = this.apiUrl.buildUrl(`/api/content/${appName}/${schemaName}/query`);
+
+            return this.http.post<{ total: number, items: [], statuses: StatusInfo[] } & Resource>(url, body).pipe(
+                map(({ total, items, statuses, _links }) => {
+                    const contents = items.map(x => parseContent(x));
+
+                    return new ContentsDto(statuses, total, contents, _links);
+                }),
+                pretifyError('Failed to load contents. Please reload.'));
+        } else {
+            const url = this.apiUrl.buildUrl(`/api/content/${appName}/${schemaName}?${fullQuery}`);
+
+            return this.http.get<{ total: number, items: [], statuses: StatusInfo[] } & Resource>(url).pipe(
+                map(({ total, items, statuses, _links }) => {
+                    const contents = items.map(x => parseContent(x));
+
+                    return new ContentsDto(statuses, total, contents, _links);
+                }),
+                pretifyError('Failed to load contents. Please reload.'));
+        }
     }
 
-    public getContentsByIds(appName: string, ids: ReadonlyArray<string>): Observable<ContentsDto> {
-        const url = this.apiUrl.buildUrl(`/api/content/${appName}/?ids=${ids.join(',')}`);
+    public getContentsByIds(appName: string, ids: ReadonlyArray<string>, maxLength?: number): Observable<ContentsDto> {
+        const fullQuery = `ids=${ids.join(',')}`;
 
-        return this.http.get<{ total: number, items: [], statuses: StatusInfo[] } & Resource>(url).pipe(
-            map(({ total, items, statuses, _links }) => {
-                const contents = items.map(x => parseContent(x));
+        if (fullQuery.length > (maxLength || 2000)) {
+            const body = { ids };
 
-                return new ContentsDto(statuses, total, contents, _links);
-            }),
-            pretifyError('Failed to load contents. Please reload.'));
+            const url = this.apiUrl.buildUrl(`/api/content/${appName}`);
+
+            return this.http.post<{ total: number, items: [], statuses: StatusInfo[] } & Resource>(url, body).pipe(
+                map(({ total, items, statuses, _links }) => {
+                    const contents = items.map(x => parseContent(x));
+
+                    return new ContentsDto(statuses, total, contents, _links);
+                }),
+                pretifyError('Failed to load contents. Please reload.'));
+
+        } else {
+            const url = this.apiUrl.buildUrl(`/api/content/${appName}?${fullQuery}`);
+
+            return this.http.get<{ total: number, items: [], statuses: StatusInfo[] } & Resource>(url).pipe(
+                map(({ total, items, statuses, _links }) => {
+                    const contents = items.map(x => parseContent(x));
+
+                    return new ContentsDto(statuses, total, contents, _links);
+                }),
+                pretifyError('Failed to load contents. Please reload.'));
+        }
     }
 
     public getContent(appName: string, schemaName: string, id: string): Observable<ContentDto> {
@@ -235,8 +271,8 @@ export class ContentsService {
             pretifyError('Failed to update content. Please reload.'));
     }
 
-    public discardDraft(appName: string, resource: Resource, version: Version): Observable<ContentDto> {
-        const link = resource._links['draft/discard'];
+    public createVersion(appName: string, resource: Resource, version: Version): Observable<ContentDto> {
+        const link = resource._links['draft/create'];
 
         const url = this.apiUrl.buildUrl(link.href);
 
@@ -245,39 +281,24 @@ export class ContentsService {
                 return parseContent(payload.body);
             }),
             tap(() => {
-                this.analytics.trackEvent('Content', 'Discarded', appName);
+                this.analytics.trackEvent('Content', 'VersioNCreated', appName);
             }),
-            pretifyError('Failed to discard draft. Please reload.'));
+            pretifyError('Failed to version a new version. Please reload.'));
     }
 
-    public proposeDraft(appName: string, resource: Resource, dto: any, version: Version): Observable<ContentDto> {
-        const link = resource._links['draft/propose'];
+    public deleteVersion(appName: string, resource: Resource, version: Version): Observable<ContentDto> {
+        const link = resource._links['draft/delete'];
 
         const url = this.apiUrl.buildUrl(link.href);
 
-        return HTTP.putVersioned(this.http, url, dto, version).pipe(
+        return HTTP.requestVersioned(this.http, link.method, url, version, {}).pipe(
             map(({ payload }) => {
                 return parseContent(payload.body);
             }),
             tap(() => {
-                this.analytics.trackEvent('Content', 'Updated', appName);
+                this.analytics.trackEvent('Content', 'VersionDeleted', appName);
             }),
-            pretifyError('Failed to propose draft. Please reload.'));
-    }
-
-    public publishDraft(appName: string, resource: Resource, dueTime: string | null, version: Version): Observable<ContentDto> {
-        const link = resource._links['draft/publish'];
-
-        const url = this.apiUrl.buildUrl(link.href);
-
-        return HTTP.requestVersioned(this.http, link.method, url, version, { status: 'Published', dueTime }).pipe(
-            map(({ payload }) => {
-                return parseContent(payload.body);
-            }),
-            tap(() => {
-                this.analytics.trackEvent('Content', 'Discarded', appName);
-            }),
-            pretifyError('Failed to publish draft. Please reload.'));
+            pretifyError('Failed to delete version. Please reload.'));
     }
 
     public putStatus(appName: string, resource: Resource, status: string, dueTime: string | null, version: Version): Observable<ContentDto> {
@@ -313,20 +334,27 @@ function parseContent(response: any) {
         response.id,
         response.status,
         response.statusColor,
-        DateTime.parseISO_UTC(response.created), response.createdBy,
-        DateTime.parseISO_UTC(response.lastModified), response.lastModifiedBy,
-        response.scheduleJob
-            ? new ScheduleDto(
-                response.scheduleJob.status,
-                response.scheduleJob.scheduledBy,
-                DateTime.parseISO_UTC(response.scheduleJob.dueTime))
-            : null,
-        response.isPending === true,
+        response.newStatus,
+        response.newStatusColor,
+        DateTime.parseISO(response.created), response.createdBy,
+        DateTime.parseISO(response.lastModified), response.lastModifiedBy,
+        parseScheduleJob(response.scheduleJob),
         response.data,
-        response.dataDraft,
         response.schemaName,
         response.schemaDisplayName,
         response.referenceData,
         response.referenceFields.map((item: any) => parseField(item)),
         new Version(response.version.toString()));
+}
+
+function parseScheduleJob(response: any) {
+    if (!response) {
+        return null;
+    }
+
+    return new ScheduleDto(
+        response.status,
+        response.scheduledBy,
+        response.color,
+        DateTime.parseISO(response.dueTime));
 }

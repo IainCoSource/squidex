@@ -8,9 +8,7 @@
 import { AbstractControl } from '@angular/forms';
 import { BehaviorSubject, combineLatest, Observable } from 'rxjs';
 import { distinctUntilChanged, map, shareReplay } from 'rxjs/operators';
-
 import { getRawValue } from './angular/forms/forms-helper';
-
 import { ErrorDto } from './utils/error';
 import { ResourceLinks } from './utils/hateos';
 import { Types } from './utils/types';
@@ -101,7 +99,7 @@ export class Form<T extends AbstractControl, TOut, TIn = TOut> {
         if (options && options.noReset) {
             this.form.markAsPristine();
         } else {
-            this.setValue(options ? options.newValue : undefined);
+            this.setValue(options?.newValue);
         }
     }
 

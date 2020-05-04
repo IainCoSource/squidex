@@ -6,10 +6,16 @@
 // ==========================================================================
 
 using System;
+using System.Net;
+using System.Net.Http;
 using System.Security.Claims;
+using System.Threading.Tasks;
+using FakeItEasy;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 using Squidex.Domain.Apps.Core.Contents;
 using Squidex.Domain.Apps.Core.Scripting;
-using Squidex.Infrastructure;
+using Squidex.Domain.Apps.Core.Scripting.Extensions;
 using Squidex.Infrastructure.Security;
 using Squidex.Infrastructure.Validation;
 using Xunit;
@@ -18,73 +24,170 @@ namespace Squidex.Domain.Apps.Core.Operations.Scripting
 {
     public class JintScriptEngineTests
     {
-        private readonly JintScriptEngine sut = new JintScriptEngine { Timeout = TimeSpan.FromSeconds(1) };
+        private readonly IHttpClientFactory httpClientFactory = A.Fake<IHttpClientFactory>();
+        private readonly JintScriptEngine sut;
 
-        [Fact]
-        public void Should_throw_validation_exception_when_calling_reject()
+        public JintScriptEngineTests()
         {
-            Assert.Throws<ValidationException>(() => sut.Execute(new ScriptContext(), "reject()"));
-            Assert.Throws<ValidationException>(() => sut.Execute(new ScriptContext(), "reject('Not valid')"));
+            var extensions = new IScriptExtension[]
+            {
+                new DateTimeScriptExtension(),
+                new HttpScriptExtension(httpClientFactory),
+                new StringScriptExtension()
+            };
+
+            var httpResponse = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{ \"key\": 42 }")
+            };
+
+            var httpHandler = new MockupHttpHandler(httpResponse);
+
+            A.CallTo(() => httpClientFactory.CreateClient(A<string>._))
+                .Returns(new HttpClient(httpHandler));
+
+            var cache = new MemoryCache(Options.Create(new MemoryCacheOptions()));
+
+            sut = new JintScriptEngine(cache, extensions)
+            {
+                Timeout = TimeSpan.FromSeconds(1)
+            };
         }
 
         [Fact]
-        public void Should_throw_security_exception_when_calling_reject()
+        public async Task ExecuteAsync_should_catch_script_syntax_errors()
         {
-            Assert.Throws<DomainForbiddenException>(() => sut.Execute(new ScriptContext(), "disallow()"));
-            Assert.Throws<DomainForbiddenException>(() => sut.Execute(new ScriptContext(), "disallow('Not allowed')"));
+            const string script = @"
+                invalid()
+            ";
+
+            await Assert.ThrowsAsync<ValidationException>(() => sut.ExecuteAsync(new ScriptContext(), script));
         }
 
         [Fact]
-        public void Should_catch_script_syntax_errors()
+        public async Task ExecuteAsync_should_catch_script_runtime_errors()
         {
-            Assert.Throws<ValidationException>(() => sut.Execute(new ScriptContext(), "invalid()"));
+            const string script = @"
+                throw 'Error';
+            ";
+
+            await Assert.ThrowsAsync<ValidationException>(() => sut.ExecuteAsync(new ScriptContext(), script));
         }
 
         [Fact]
-        public void Should_catch_script_runtime_errors()
-        {
-            Assert.Throws<ValidationException>(() => sut.Execute(new ScriptContext(), "throw 'Error';"));
-        }
-
-        [Fact]
-        public void Should_catch_script_runtime_errors_on_execute_and_transform()
-        {
-            Assert.Throws<ValidationException>(() => sut.ExecuteAndTransform(new ScriptContext(), "throw 'Error';"));
-        }
-
-        [Fact]
-        public void Should_return_original_content_when_transform_script_failed()
-        {
-            var content = new NamedContentData();
-            var context = new ScriptContext { Data = content };
-
-            var result = sut.Transform(context, "x => x");
-
-            Assert.Same(content, result);
-        }
-
-        [Fact]
-        public void Should_throw_when_execute_and_transform_script_failed()
-        {
-            var content = new NamedContentData();
-            var context = new ScriptContext { Data = content };
-
-            Assert.Throws<ValidationException>(() => sut.ExecuteAndTransform(context, "invalid()"));
-        }
-
-        [Fact]
-        public void Should_return_original_content_when_content_is_not_replaced()
+        public async Task TransformAsync_should_return_original_content_when_script_failed()
         {
             var content = new NamedContentData();
             var context = new ScriptContext { Data = content };
 
-            var result = sut.ExecuteAndTransform(context, "var x = 0;");
+            const string script = @"
+                x => x
+            ";
 
-            Assert.Same(content, result);
+            var result = await sut.TransformAsync(context, script);
+
+            Assert.Empty(result);
         }
 
         [Fact]
-        public void Should_fetch_operation_name()
+        public async Task TransformAsync_should_transform_content()
+        {
+            var content =
+                new NamedContentData()
+                    .AddField("number0",
+                        new ContentFieldData()
+                            .AddValue("iv", 1.0))
+                    .AddField("number1",
+                        new ContentFieldData()
+                            .AddValue("iv", 1.0));
+            var expected =
+                new NamedContentData()
+                    .AddField("number1",
+                        new ContentFieldData()
+                            .AddValue("iv", 2.0))
+                    .AddField("number2",
+                        new ContentFieldData()
+                            .AddValue("iv", 10.0));
+
+            var context = new ScriptContext { Data = content };
+
+            const string script = @"
+                var data = ctx.data;
+
+                delete data.number0;
+
+                data.number1.iv = data.number1.iv + 1;
+                data.number2 = { 'iv': 10 };
+
+                replace(data);
+            ";
+
+            var result = await sut.TransformAsync(context, script);
+
+            Assert.Equal(expected, result);
+        }
+
+        [Fact]
+        public async Task ExecuteAndTransformAsync_should_catch_javascript_error()
+        {
+            const string script = @"
+                throw 'Error';
+            ";
+
+            await Assert.ThrowsAsync<ValidationException>(() => sut.ExecuteAndTransformAsync(new ScriptContext(), script));
+        }
+
+        [Fact]
+        public async Task ExecuteAndTransformAsync_should_throw_when_script_failed()
+        {
+            var content = new NamedContentData();
+            var context = new ScriptContext { Data = content };
+
+            const string script = @"
+                invalid();
+            ";
+
+            await Assert.ThrowsAsync<ValidationException>(() => sut.ExecuteAndTransformAsync(context, script));
+        }
+
+        [Fact]
+        public async Task ExecuteAndTransformAsync_should_return_original_content_when_not_replaced()
+        {
+            var content = new NamedContentData();
+            var context = new ScriptContext { Data = content };
+
+            const string script = @"
+                var x = 0;
+            ";
+
+            var result = await sut.ExecuteAndTransformAsync(context, script);
+
+            Assert.Empty(result);
+        }
+
+        [Fact]
+        public async Task ExecuteAndTransformAsync_should_return_original_content_when_not_replaced_async()
+        {
+            var content = new NamedContentData();
+            var context = new ScriptContext { Data = content };
+
+            const string script = @"
+                async = true;
+
+                var x = 0;
+
+                getJSON('http://squidex.io', function(result) {
+                    complete();
+                });                    
+            ";
+
+            var result = await sut.ExecuteAndTransformAsync(context, script);
+
+            Assert.Empty(result);
+        }
+
+        [Fact]
+        public async Task ExecuteAndTransformAsync_should_transform_object()
         {
             var content = new NamedContentData();
 
@@ -96,18 +199,94 @@ namespace Squidex.Domain.Apps.Core.Operations.Scripting
 
             var context = new ScriptContext { Data = content, Operation = "MyOperation" };
 
-            var result = sut.ExecuteAndTransform(context, @"
+            const string script = @"
                 var data = ctx.data;
 
                 data.operation = { iv: ctx.operation };
 
-                replace(data)");
+                replace(data);
+            ";
+
+            var result = await sut.ExecuteAndTransformAsync(context, script);
 
             Assert.Equal(expected, result);
         }
 
         [Fact]
-        public void Should_transform_content_and_return_with_transform()
+        public async Task ExecuteAndTransformAsync_should_transform_object_async()
+        {
+            var content = new NamedContentData();
+
+            var expected =
+                new NamedContentData()
+                    .AddField("operation",
+                        new ContentFieldData()
+                            .AddValue("iv", 42));
+
+            var context = new ScriptContext { Data = content, Operation = "MyOperation" };
+
+            const string script = @"
+                async = true;
+
+                var data = ctx.data;
+
+                getJSON('http://squidex.io', function(result) {
+                    data.operation = { iv: result.key };
+
+                    replace(data);
+                });        
+
+            ";
+
+            var result = await sut.ExecuteAndTransformAsync(context, script);
+
+            Assert.Equal(expected, result);
+        }
+
+        [Fact]
+        public async Task ExecuteAndTransformAsync_should_ignore_transformation_when_async_not_set()
+        {
+            var content = new NamedContentData();
+            var context = new ScriptContext { Data = content, Operation = "MyOperation" };
+
+            const string script = @"
+                var data = ctx.data;
+
+                getJSON('http://squidex.io', function(result) {
+                    data.operation = { iv: result.key };
+
+                    replace(data);
+                });        
+
+            ";
+
+            var result = await sut.ExecuteAndTransformAsync(context, script);
+
+            Assert.Empty( result);
+        }
+
+        [Fact]
+        public async Task ExecuteAndTransformAsync_should_timeout_when_replace_never_called()
+        {
+            var content = new NamedContentData();
+            var context = new ScriptContext { Data = content, Operation = "MyOperation" };
+
+            const string script = @"
+                async = true;
+
+                var data = ctx.data;
+
+                getJSON('http://squidex.io', function(result) {
+                    data.operation = { iv: result.key };
+                });        
+
+            ";
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => sut.ExecuteAndTransformAsync(context, script));
+        }
+
+        [Fact]
+        public async Task ExecuteAndTransformAsync_should_transform_content_and_return_with_execute_transform()
         {
             var content =
                 new NamedContentData()
@@ -128,7 +307,7 @@ namespace Squidex.Domain.Apps.Core.Operations.Scripting
 
             var context = new ScriptContext { Data = content };
 
-            var result = sut.Transform(context, @"
+            const string script = @"
                 var data = ctx.data;
 
                 delete data.number0;
@@ -136,108 +315,16 @@ namespace Squidex.Domain.Apps.Core.Operations.Scripting
                 data.number1.iv = data.number1.iv + 1;
                 data.number2 = { 'iv': 10 };
 
-                replace(data);");
+                replace(data);
+            ";
+
+            var result = await sut.ExecuteAndTransformAsync(context, script);
 
             Assert.Equal(expected, result);
         }
 
         [Fact]
-        public void Should_slugify_value()
-        {
-            var content =
-                new NamedContentData()
-                    .AddField("title",
-                        new ContentFieldData()
-                            .AddValue("iv", "4 Häuser"));
-
-            var expected =
-                new NamedContentData()
-                    .AddField("title",
-                        new ContentFieldData()
-                            .AddValue("iv", "4 Häuser"))
-                    .AddField("slug",
-                        new ContentFieldData()
-                            .AddValue("iv", "4-haeuser"));
-
-            var context = new ScriptContext { Data = content };
-
-            var result = sut.Transform(context, @"
-                var data = ctx.data;
-
-                data.slug = { iv: slugify(data.title.iv) };
-
-                replace(data);");
-
-            Assert.Equal(expected, result);
-        }
-
-        [Fact]
-        public void Should_slugify_value_with_single_char()
-        {
-            var content =
-                new NamedContentData()
-                    .AddField("title",
-                        new ContentFieldData()
-                            .AddValue("iv", "4 Häuser"));
-
-            var expected =
-                new NamedContentData()
-                    .AddField("title",
-                        new ContentFieldData()
-                            .AddValue("iv", "4 Häuser"))
-                    .AddField("slug",
-                        new ContentFieldData()
-                            .AddValue("iv", "4-hauser"));
-
-            var context = new ScriptContext { Data = content };
-
-            var result = sut.Transform(context, @"
-                var data = ctx.data;
-
-                data.slug = { iv: slugify(data.title.iv, true) };
-
-                replace(data);");
-
-            Assert.Equal(expected, result);
-        }
-
-        [Fact]
-        public void Should_transform_content_and_return_with_execute_transform()
-        {
-            var content =
-                new NamedContentData()
-                    .AddField("number0",
-                        new ContentFieldData()
-                            .AddValue("iv", 1.0))
-                    .AddField("number1",
-                        new ContentFieldData()
-                            .AddValue("iv", 1.0));
-            var expected =
-                new NamedContentData()
-                    .AddField("number1",
-                        new ContentFieldData()
-                            .AddValue("iv", 2.0))
-                    .AddField("number2",
-                        new ContentFieldData()
-                            .AddValue("iv", 10.0));
-
-            var context = new ScriptContext { Data = content };
-
-            var result = sut.ExecuteAndTransform(context, @"
-                var data = ctx.data;
-
-                delete data.number0;
-
-                data.number1.iv = data.number1.iv + 1;
-                data.number2 = { 'iv': 10 };
-
-                replace(data);");
-
-            Assert.Equal(expected, result);
-        }
-
-        [Fact]
-        public void Should_transform_content_with_old_content()
+        public async Task ExecuteAndTransformAsync_should_transform_content_with_old_content()
         {
             var content =
                 new NamedContentData()
@@ -264,42 +351,81 @@ namespace Squidex.Domain.Apps.Core.Operations.Scripting
 
             var context = new ScriptContext { Data = content, DataOld = oldContent, User = userPrincipal };
 
-            var result = sut.ExecuteAndTransform(context, @"
+            const string script = @"
                 ctx.data.number0.iv = ctx.data.number0.iv + ctx.oldData.number0.iv * parseInt(ctx.user.id, 10);
 
-                replace(ctx.data);");
+                replace(ctx.data);
+            ";
+
+            var result = await sut.ExecuteAndTransformAsync(context, script);
 
             Assert.Equal(expected, result);
         }
 
         [Fact]
-        public void Should_evaluate_to_true_when_expression_match()
+        public void Evaluate_should_return_true_when_expression_match()
         {
-            var result = sut.Evaluate("value", new { i = 2 }, "value.i == 2");
+            const string script = @"
+                value.i == 2
+            ";
+
+            var context = new ScriptContext
+            {
+                ["value"] = new { i = 2 }
+            };
+
+            var result = sut.Evaluate(context, script);
 
             Assert.True(result);
         }
 
         [Fact]
-        public void Should_evaluate_to_true_when_status_match()
+        public void Evaluate_should_return_true_when_status_match()
         {
-            var result = sut.Evaluate("value", new { status = Status.Published }, "value.status == 'Published'");
+            const string script = @"
+                value.status == 'Published'
+            ";
+
+            var context = new ScriptContext
+            {
+                ["value"] = new { status = Status.Published }
+            };
+
+            var result = sut.Evaluate(context, script);
 
             Assert.True(result);
         }
 
         [Fact]
-        public void Should_evaluate_to_false_when_expression_match()
+        public void Evaluate_should_return_false_when_expression_match()
         {
-            var result = sut.Evaluate("value", new { i = 2 }, "value.i == 3");
+            const string script = @"
+                value.i == 3
+            ";
+
+            var context = new ScriptContext
+            {
+                ["value"] = new { i = 2 }
+            };
+
+            var result = sut.Evaluate(context, script);
 
             Assert.False(result);
         }
 
         [Fact]
-        public void Should_evaluate_to_false_when_script_is_invalid()
+        public void Evaluate_should_return_false_when_script_is_invalid()
         {
-            var result = sut.Evaluate("value", new { i = 2 }, "function()");
+            const string script = @"
+                function();
+            ";
+
+            var context = new ScriptContext
+            {
+                ["value"] = new { i = 2 }
+            };
+
+            var result = sut.Evaluate(context, script);
 
             Assert.False(result);
         }

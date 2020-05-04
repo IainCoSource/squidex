@@ -6,7 +6,6 @@
  */
 
 import { AbstractControl, ValidatorFn, Validators } from '@angular/forms';
-
 import { DateTime, Types } from '@app/framework/internal';
 
 function isEmptyInputValue(value: any): boolean {
@@ -66,7 +65,7 @@ export module ValidatorsEx {
 
             if (v) {
                 try {
-                    DateTime.parseISO_UTC(v);
+                    DateTime.parseISO(v);
                 } catch (e) {
                     return { validdatetime: false };
                 }
@@ -119,7 +118,7 @@ export module ValidatorsEx {
                     return null;
                 }
 
-                const length: number = control.value ? control.value.length : 0;
+                const length: number = control.value?.length || 0;
 
                 if (minLength === maxLength) {
                     if (isNaN(length) || length !== minLength) {

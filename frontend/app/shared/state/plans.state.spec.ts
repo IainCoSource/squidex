@@ -5,18 +5,10 @@
  * Copyright (c) Squidex UG (haftungsbeschränkt). All rights reserved.
  */
 
+import { DialogService, PlanDto, PlansService, PlansState, versioned } from '@app/shared/internal';
 import { of, throwError } from 'rxjs';
 import { onErrorResumeNext } from 'rxjs/operators';
 import { IMock, It, Mock, Times } from 'typemoq';
-
-import {
-    DialogService,
-    PlanDto,
-    PlansService,
-    PlansState,
-    versioned
-} from '@app/shared/internal';
-
 import { TestValues } from './_test-helpers';
 
 describe('PlansState', () => {
@@ -33,8 +25,8 @@ describe('PlansState', () => {
         currentPlanId: 'id1',
         planOwner: creator,
         plans: [
-            new PlanDto('id1', 'name1', '100€', 'id1_yearly', '200€', 1, 1, 1),
-            new PlanDto('id2', 'name2', '400€', 'id2_yearly', '800€', 2, 2, 2)
+            new PlanDto('id1', 'name1', '100€', undefined, 'id1_yearly', '200€', undefined, 1, 1, 1),
+            new PlanDto('id2', 'name2', '400€', undefined, 'id2_yearly', '800€', undefined, 2, 2, 2)
         ],
         hasPortal: true
     };

@@ -59,10 +59,15 @@ namespace Squidex.Areas.Api.Controllers.Backups
 
             var fileName = $"backup-{app}-{backup.Started:yyyy-MM-dd_HH-mm-ss}.zip";
 
-            return new FileCallbackResult("application/zip", fileName, false, bodyStream =>
+            var callback = new FileCallback((body, range, ct) =>
             {
-                return backupArchiveStore.DownloadAsync(id, bodyStream);
+                return backupArchiveStore.DownloadAsync(id, body, ct);
             });
+
+            return new FileCallbackResult("application/zip", callback)
+            {
+                FileDownloadName = fileName
+            };
         }
     }
 }

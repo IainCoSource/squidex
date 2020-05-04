@@ -7,23 +7,7 @@
 
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { inject, TestBed } from '@angular/core/testing';
-
-import {
-    AnalyticsService,
-    ApiUrlConfig,
-    AssetDto,
-    AssetFolderDto,
-    AssetFoldersDto,
-    AssetsDto,
-    AssetsService,
-    DateTime,
-    encodeQuery,
-    ErrorDto,
-    MathHelper,
-    Resource,
-    ResourceLinks,
-    Version
-} from '@app/shared/internal';
+import { AnalyticsService, ApiUrlConfig, AssetDto, AssetFolderDto, AssetFoldersDto, AssetsDto, AssetsService, DateTime, encodeQuery, ErrorDto, MathHelper, Resource, ResourceLinks, sanitize, Version } from '@app/shared/internal';
 
 describe('AssetsService', () => {
     const version = new Version('1');
@@ -75,7 +59,7 @@ describe('AssetsService', () => {
 
         let assets: AssetsDto;
 
-        assetsService.getAssets('my-app', 17, 13).subscribe(result => {
+        assetsService.getAssets('my-app', { take: 17, skip: 13 }).subscribe(result => {
             assets = result;
         });
 
@@ -153,14 +137,16 @@ describe('AssetsService', () => {
         expect(asset!).toEqual(createAsset(12));
     }));
 
-    it('should append query to find by name',
+    it('should make get request to get assets by name',
         inject([AssetsService, HttpTestingController], (assetsService: AssetsService, httpMock: HttpTestingController) => {
 
-        assetsService.getAssets('my-app', 17, 13, { fullText: 'my-query' }).subscribe();
+        const query = { fullText: 'my-query' };
 
-        const query = { filter: { and: [{ path: 'fileName', op: 'contains', value: 'my-query' }] }, take: 17, skip: 13 };
+        assetsService.getAssets('my-app', { take: 17, skip: 13, query }).subscribe();
 
-        const req = httpMock.expectOne(`http://service/p/api/apps/my-app/assets?q=${encodeQuery(query)}`);
+        const expectedQuery = { filter: { and: [{ path: 'fileName', op: 'contains', value: 'my-query' }] }, take: 17, skip: 13 };
+
+        const req = httpMock.expectOne(`http://service/p/api/apps/my-app/assets?q=${encodeQuery(expectedQuery)}`);
 
         expect(req.request.method).toEqual('GET');
         expect(req.request.headers.get('If-Match')).toBeNull();
@@ -168,14 +154,32 @@ describe('AssetsService', () => {
         req.flush({ total: 10, items: [] });
     }));
 
-    it('should append query to find by tag',
+    it('should make post request to get assets by name when request limit reached',
         inject([AssetsService, HttpTestingController], (assetsService: AssetsService, httpMock: HttpTestingController) => {
 
-        assetsService.getAssets('my-app', 17, 13, undefined, ['tag1']).subscribe();
+        const query = { fullText: 'my-query' };
 
-        const query = { filter: { and: [{ path: 'tags', op: 'eq', value: 'tag1' }] }, take: 17, skip: 13 };
+        assetsService.getAssets('my-app', { take: 17, skip: 13, query, maxLength: 5 }).subscribe();
 
-        const req = httpMock.expectOne(`http://service/p/api/apps/my-app/assets?q=${encodeQuery(query)}`);
+        const expectedQuery = { filter: { and: [{ path: 'fileName', op: 'contains', value: 'my-query' }] }, take: 17, skip: 13 };
+
+        const req = httpMock.expectOne(`http://service/p/api/apps/my-app/assets/query`);
+
+        expect(req.request.method).toEqual('POST');
+        expect(req.request.headers.get('If-Match')).toBeNull();
+        expect(req.request.body).toEqual({ q: sanitize(expectedQuery) });
+
+        req.flush({ total: 10, items: [] });
+    }));
+
+    it('should make get request to get assets by tag',
+        inject([AssetsService, HttpTestingController], (assetsService: AssetsService, httpMock: HttpTestingController) => {
+
+        assetsService.getAssets('my-app', { take: 17, skip: 13, tags: ['tag1'] }).subscribe();
+
+        const expectedQuery = { filter: { and: [{ path: 'tags', op: 'eq', value: 'tag1' }] }, take: 17, skip: 13 };
+
+        const req = httpMock.expectOne(`http://service/p/api/apps/my-app/assets?q=${encodeQuery(expectedQuery)}`);
 
         expect(req.request.method).toEqual('GET');
         expect(req.request.headers.get('If-Match')).toBeNull();
@@ -183,12 +187,30 @@ describe('AssetsService', () => {
         req.flush({ total: 10, items: [] });
     }));
 
-    it('should append ids query to find by ids',
+    it('should make get request to get assets by tag when request limit reached',
         inject([AssetsService, HttpTestingController], (assetsService: AssetsService, httpMock: HttpTestingController) => {
 
-        assetsService.getAssets('my-app', 0, 0, undefined, undefined, ['12', '23']).subscribe();
+        assetsService.getAssets('my-app', { take: 17, skip: 13, tags: ['tag1'], maxLength: 5 }).subscribe();
 
-        const req = httpMock.expectOne('http://service/p/api/apps/my-app/assets?ids=12,23');
+        const expectedQuery = { filter: { and: [{ path: 'tags', op: 'eq', value: 'tag1' }] }, take: 17, skip: 13 };
+
+        const req = httpMock.expectOne(`http://service/p/api/apps/my-app/assets/query`);
+
+        expect(req.request.method).toEqual('POST');
+        expect(req.request.headers.get('If-Match')).toBeNull();
+        expect(req.request.body).toEqual({ q: sanitize(expectedQuery) });
+
+        req.flush({ total: 10, items: [] });
+    }));
+
+    it('should make get request to get assets by ids',
+        inject([AssetsService, HttpTestingController], (assetsService: AssetsService, httpMock: HttpTestingController) => {
+
+        const ids = ['1', '2'];
+
+        assetsService.getAssets('my-app', { ids }).subscribe();
+
+        const req = httpMock.expectOne('http://service/p/api/apps/my-app/assets?ids=1,2');
 
         expect(req.request.method).toEqual('GET');
         expect(req.request.headers.get('If-Match')).toBeNull();
@@ -412,9 +434,9 @@ describe('AssetsService', () => {
 
         return {
             id: `id${id}`,
-            created: `${id % 1000 + 2000}-12-12T10:10:00`,
+            created: `${id % 1000 + 2000}-12-12T10:10:00Z`,
             createdBy: `creator${id}`,
-            lastModified: `${id % 1000 + 2000}-11-11T10:10:00`,
+            lastModified: `${id % 1000 + 2000}-11-11T10:10:00Z`,
             lastModifiedBy: `modifier${id}`,
             fileName: `My Name${id}${suffix}.png`,
             fileHash: `My Hash${id}${suffix}`,
@@ -471,8 +493,8 @@ export function createAsset(id: number, tags?: ReadonlyArray<string>, suffix = '
 
     return new AssetDto(links, meta,
         `id${id}`,
-        DateTime.parseISO_UTC(`${id % 1000 + 2000}-12-12T10:10:00`), `creator${id}`,
-        DateTime.parseISO_UTC(`${id % 1000 + 2000}-11-11T10:10:00`), `modifier${id}`,
+        DateTime.parseISO(`${id % 1000 + 2000}-12-12T10:10:00Z`), `creator${id}`,
+        DateTime.parseISO(`${id % 1000 + 2000}-11-11T10:10:00Z`), `modifier${id}`,
         `My Name${id}${suffix}.png`,
         `My Hash${id}${suffix}`,
         'png',

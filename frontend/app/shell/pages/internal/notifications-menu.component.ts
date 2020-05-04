@@ -6,20 +6,9 @@
  */
 
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit } from '@angular/core';
+import { AuthService, CommentDto, CommentsService, CommentsState, DialogService, fadeAnimation, LocalStoreService, ModalModel, ResourceOwner } from '@app/shared';
 import { timer } from 'rxjs';
 import { onErrorResumeNext, switchMap, tap } from 'rxjs/operators';
-
-import {
-    AuthService,
-    CommentDto,
-    CommentsService,
-    CommentsState,
-    DialogService,
-    fadeAnimation,
-    LocalStoreService,
-    ModalModel,
-    ResourceOwner
-} from '@app/shared';
 
 const CONFIG_KEY = 'notifications.version';
 
@@ -90,10 +79,6 @@ export class NotificationsMenuComponent extends ResourceOwner implements OnInit 
                 })));
 
         this.own(timer(0, 4000).pipe(switchMap(() => this.commentsState.load(true).pipe(onErrorResumeNext()))));
-    }
-
-    public delete(comment: CommentDto) {
-        this.commentsState.delete(comment);
     }
 
     public trackByComment(comment: CommentDto) {

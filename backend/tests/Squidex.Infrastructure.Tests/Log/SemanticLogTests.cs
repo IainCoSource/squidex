@@ -37,7 +37,7 @@ namespace Squidex.Infrastructure.Log
 
             channels.Add(channel);
 
-            A.CallTo(() => channel.Log(A<SemanticLogLevel>.Ignored, A<string>.Ignored))
+            A.CallTo(() => channel.Log(A<SemanticLogLevel>._, A<string>._))
                 .Invokes((SemanticLogLevel level, string message) =>
                 {
                     output += message;
@@ -49,8 +49,8 @@ namespace Squidex.Infrastructure.Log
         [Fact]
         public void Should_log_multiple_lines()
         {
-            Log.Log(SemanticLogLevel.Error, None.Value, (_, w) => w.WriteProperty("logMessage", "Msg1"));
-            Log.Log(SemanticLogLevel.Error, None.Value, (_, w) => w.WriteProperty("logMessage", "Msg2"));
+            Log.Log(SemanticLogLevel.Error, null, w => w.WriteProperty("logMessage", "Msg1"));
+            Log.Log(SemanticLogLevel.Error, null, w => w.WriteProperty("logMessage", "Msg2"));
 
             var expected1 =
                 LogTest(w => w
@@ -229,7 +229,7 @@ namespace Squidex.Infrastructure.Log
         {
             var exception = new InvalidOperationException();
 
-            Log.LogWarning(exception);
+            Log.LogWarning(exception, w => { });
 
             var expected =
                 LogTest(w => w
@@ -286,7 +286,7 @@ namespace Squidex.Infrastructure.Log
         {
             var exception = new InvalidOperationException();
 
-            Log.LogError(exception);
+            Log.LogError(exception, w => { });
 
             var expected =
                 LogTest(w => w
@@ -343,7 +343,7 @@ namespace Squidex.Infrastructure.Log
         {
             var exception = new InvalidOperationException();
 
-            Log.LogFatal(exception);
+            Log.LogFatal(exception, w => { });
 
             var expected =
                 LogTest(w => w
@@ -365,18 +365,6 @@ namespace Squidex.Infrastructure.Log
                     .WriteProperty("logLevel", "Fatal")
                     .WriteProperty("logValue", 1500)
                     .WriteException(exception));
-
-            Assert.Equal(expected, output);
-        }
-
-        [Fact]
-        public void Should_log_nothing_when_exception_is_null()
-        {
-            Log.LogFatal((Exception?)null);
-
-            var expected =
-                LogTest(w => w
-                    .WriteProperty("logLevel", "Fatal"));
 
             Assert.Equal(expected, output);
         }
@@ -484,8 +472,8 @@ namespace Squidex.Infrastructure.Log
                     .WriteObject("eventId", e => e
                         .WriteProperty("id", 123)
                         .WriteProperty("name", "EventName"))
-                    .WriteException(exception)
-                    .WriteProperty("category", "Squidex.Infrastructure.Log.SemanticLogTests"));
+                    .WriteProperty("category", "Squidex.Infrastructure.Log.SemanticLogTests")
+                    .WriteException(exception));
 
             Assert.Equal(expected, output);
         }
@@ -499,14 +487,14 @@ namespace Squidex.Infrastructure.Log
             var channel1 = A.Fake<ILogChannel>();
             var channel2 = A.Fake<ILogChannel>();
 
-            A.CallTo(() => channel1.Log(A<SemanticLogLevel>.Ignored, A<string>.Ignored)).Throws(exception1);
-            A.CallTo(() => channel2.Log(A<SemanticLogLevel>.Ignored, A<string>.Ignored)).Throws(exception2);
+            A.CallTo(() => channel1.Log(A<SemanticLogLevel>._, A<string>._)).Throws(exception1);
+            A.CallTo(() => channel2.Log(A<SemanticLogLevel>._, A<string>._)).Throws(exception2);
 
             var sut = new SemanticLog(options, new[] { channel1, channel2 }, Enumerable.Empty<ILogAppender>(), JsonLogWriterFactory.Default());
 
             try
             {
-                sut.Log(SemanticLogLevel.Debug, None.Value, (_, w) => w.WriteProperty("should", "throw"));
+                sut.Log(SemanticLogLevel.Debug, null, w => w.WriteProperty("should", "throw"));
 
                 Assert.False(true);
             }

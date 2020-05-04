@@ -10,7 +10,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Squidex.Domain.Apps.Entities.Apps;
-using Squidex.Domain.Apps.Entities.Apps.Services;
+using Squidex.Domain.Apps.Entities.Apps.Plans;
 using Squidex.Shared;
 using Squidex.Shared.Users;
 using Squidex.Web;
@@ -59,7 +59,7 @@ namespace Squidex.Areas.Api.Controllers.Apps.Models
 
         private void WithPlan(IAppEntity app, IAppPlansProvider plans)
         {
-            MaxContributors = plans.GetPlanForApp(app).MaxContributors;
+            MaxContributors = plans.GetPlanForApp(app).Plan.MaxContributors;
         }
 
         private void WithInvited(bool isInvited)

@@ -7,16 +7,8 @@
 
 import { Component, OnInit } from '@angular/core';
 import { FormControl } from '@angular/forms';
-
-import {
-    AssetsState,
-    DialogModel,
-    LocalStoreService,
-    Queries,
-    Query,
-    ResourceOwner,
-    UIState
-} from '@app/shared';
+import { ActivatedRoute } from '@angular/router';
+import { AssetsState, DialogModel, LocalStoreService, Queries, Query, ResourceOwner, UIState } from '@app/shared';
 
 @Component({
     selector: 'sqx-assets-page',
@@ -35,6 +27,7 @@ export class AssetsPageComponent extends ResourceOwner implements OnInit {
     constructor(
         public readonly assetsState: AssetsState,
         private readonly localStore: LocalStoreService,
+        private readonly route: ActivatedRoute,
         private readonly uiState: UIState
     ) {
         super();
@@ -43,7 +36,11 @@ export class AssetsPageComponent extends ResourceOwner implements OnInit {
     }
 
     public ngOnInit() {
-        this.assetsState.load();
+        this.own(
+            this.route.queryParams
+                .subscribe(p => {
+                    this.assetsState.search({ fullText: p['query'] });
+                }));
     }
 
     public reload() {

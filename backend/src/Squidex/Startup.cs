@@ -19,6 +19,7 @@ using Squidex.Config.Authentication;
 using Squidex.Config.Domain;
 using Squidex.Config.Web;
 using Squidex.Pipeline.Plugins;
+using Squidex.Web.Pipeline;
 
 #pragma warning disable CS0618 // Type or member is obsolete
 
@@ -37,6 +38,7 @@ namespace Squidex
         {
             services.AddHttpClient();
             services.AddMemoryCache();
+            services.AddNonBreakingSameSiteCookies();
 
             services.AddSquidexMvcWithPlugins(config);
 
@@ -62,6 +64,7 @@ namespace Squidex
             services.AddSquidexQueries(config);
             services.AddSquidexRules(config);
             services.AddSquidexSchemas();
+            services.AddSquidexSearch();
             services.AddSquidexSerializers();
             services.AddSquidexStoreServices(config);
             services.AddSquidexSubscriptions(config);
@@ -71,12 +74,14 @@ namespace Squidex
 
         public void Configure(IApplicationBuilder app)
         {
-            app.UseSquidexHealthCheck();
-            app.UseSquidexRobotsTxt();
+            app.UseCookiePolicy();
+
+            app.UseSquidexForwardingRules(config);
             app.UseSquidexTracking();
             app.UseSquidexLocalCache();
             app.UseSquidexCors();
-            app.UseSquidexForwardingRules(config);
+            app.UseSquidexHealthCheck();
+            app.UseSquidexRobotsTxt();
 
             app.ConfigureApi();
             app.ConfigurePortal();

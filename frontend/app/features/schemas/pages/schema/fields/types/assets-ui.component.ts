@@ -7,7 +7,6 @@
 
 import { Component, Input, OnInit } from '@angular/core';
 import { FormControl, FormGroup } from '@angular/forms';
-
 import { AssetsFieldPropertiesDto, FieldDto } from '@app/shared';
 
 @Component({
@@ -26,7 +25,7 @@ export class AssetsUIComponent implements OnInit {
     public properties: AssetsFieldPropertiesDto;
 
     public ngOnInit() {
-        this.editForm.setControl('resolveImage',
-            new FormControl(this.properties.resolveImage));
+        this.editForm.setControl('resolveFirst',
+            new FormControl(this.properties.resolveFirst));
     }
 }

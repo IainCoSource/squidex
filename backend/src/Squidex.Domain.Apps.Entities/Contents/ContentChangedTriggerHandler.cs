@@ -45,8 +45,6 @@ namespace Squidex.Domain.Apps.Entities.Contents
 
             SimpleMapper.Map(content, result);
 
-            result.Data = content.Data ?? content.DataDraft;
-
             switch (@event.Payload)
             {
                 case ContentCreated _:
@@ -55,13 +53,10 @@ namespace Squidex.Domain.Apps.Entities.Contents
                 case ContentDeleted _:
                     result.Type = EnrichedContentEventType.Deleted;
                     break;
-                case ContentChangesPublished _:
-                    result.Type = EnrichedContentEventType.Updated;
-                    break;
 
-                case ContentStatusChanged contentStatusChanged:
+                case ContentStatusChanged statusChanged:
                     {
-                        switch (contentStatusChanged.Change)
+                        switch (statusChanged.Change)
                         {
                             case StatusChange.Published:
                                 result.Type = EnrichedContentEventType.Published;
@@ -86,7 +81,7 @@ namespace Squidex.Domain.Apps.Entities.Contents
                                 content.Id,
                                 content.Version - 1);
 
-                        result.DataOld = previousContent.Data ?? previousContent.DataDraft;
+                        result.DataOld = previousContent.Data;
                         break;
                     }
             }
@@ -145,7 +140,17 @@ namespace Squidex.Domain.Apps.Entities.Contents
 
         private bool MatchsCondition(ContentChangedTriggerSchemaV2 schema, EnrichedSchemaEventBase @event)
         {
-            return string.IsNullOrWhiteSpace(schema.Condition) || scriptEngine.Evaluate("event", @event, schema.Condition);
+            if (string.IsNullOrWhiteSpace(schema.Condition))
+            {
+                return true;
+            }
+
+            var context = new ScriptContext
+            {
+                ["event"] = @event
+            };
+
+            return scriptEngine.Evaluate(context, schema.Condition);
         }
     }
 }

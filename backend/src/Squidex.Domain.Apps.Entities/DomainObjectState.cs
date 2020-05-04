@@ -6,7 +6,6 @@
 // ==========================================================================
 
 using System;
-using System.Runtime.Serialization;
 using NodaTime;
 using Squidex.Domain.Apps.Events;
 using Squidex.Infrastructure;
@@ -23,25 +22,34 @@ namespace Squidex.Domain.Apps.Entities
         IEntityWithVersion
         where T : class
     {
-        [DataMember]
         public Guid Id { get; set; }
 
-        [DataMember]
         public RefToken CreatedBy { get; set; }
 
-        [DataMember]
         public RefToken LastModifiedBy { get; set; }
 
-        [DataMember]
         public Instant Created { get; set; }
 
-        [DataMember]
         public Instant LastModified { get; set; }
 
-        [DataMember]
-        public long Version { get; set; } = EtagVersion.Empty;
+        public bool IsDeleted { get; set; }
 
-        public abstract bool ApplyEvent(IEvent @event);
+        public long Version { get; set; }
+
+        protected DomainObjectState()
+        {
+            Version = EtagVersion.Empty;
+        }
+
+        public virtual bool ApplyEvent(IEvent @event, EnvelopeHeaders headers)
+        {
+            return ApplyEvent(@event);
+        }
+
+        public virtual bool ApplyEvent(IEvent @event)
+        {
+            return false;
+        }
 
         public T Apply(Envelope<IEvent> @event)
         {
@@ -49,7 +57,7 @@ namespace Squidex.Domain.Apps.Entities
 
             var clone = (DomainObjectState<T>)MemberwiseClone();
 
-            if (!clone.ApplyEvent(@event.Payload))
+            if (!clone.ApplyEvent(@event.Payload, @event.Headers))
             {
                 return (this as T)!;
             }
@@ -61,13 +69,15 @@ namespace Squidex.Domain.Apps.Entities
                 clone.Id = headers.AggregateId();
             }
 
+            var timestamp = headers.Timestamp();
+
             if (clone.CreatedBy == null)
             {
-                clone.Created = headers.Timestamp();
+                clone.Created = timestamp;
                 clone.CreatedBy = payload.Actor;
             }
 
-            clone.LastModified = headers.Timestamp();
+            clone.LastModified = timestamp;
             clone.LastModifiedBy = payload.Actor;
 
             return (clone as T)!;

@@ -6,13 +6,7 @@
  */
 
 import { Directive, ElementRef, Input, OnChanges, Pipe, PipeTransform, Renderer2 } from '@angular/core';
-
-import {
-    MetaFields,
-    RootFieldDto,
-    TableField,
-    Types
-} from '@app/shared';
+import { MetaFields, RootFieldDto, TableField, Types } from '@app/shared';
 
 export function getTableWidth(fields: ReadonlyArray<TableField>) {
     let result = 0;
@@ -44,11 +38,11 @@ export function getCellWidth(field: TableField) {
             case MetaFields.lastModifiedByName:
                 return 150;
             case MetaFields.status:
-                return 160;
+                return 200;
             case MetaFields.statusNext:
                 return 240;
             case MetaFields.statusColor:
-                return 50;
+                return 80;
             case MetaFields.version:
                 return 80;
         }

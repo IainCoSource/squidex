@@ -31,7 +31,7 @@ namespace Squidex.Infrastructure.Orleans
         {
             await sut.Invoke(context);
 
-            A.CallTo(() => log.Log(A<SemanticLogLevel>.Ignored, A<None>.Ignored, A<Action<None, IObjectWriter>>.Ignored))
+            A.CallTo(() => log.Log(A<SemanticLogLevel>._, A<Exception?>._, A<LogFormatter>._!))
                 .MustNotHaveHappened();
         }
 
@@ -43,7 +43,7 @@ namespace Squidex.Infrastructure.Orleans
 
             await Assert.ThrowsAsync<ValidationException>(() => sut.Invoke(context));
 
-            A.CallTo(() => log.Log(A<SemanticLogLevel>.Ignored, A<None>.Ignored, A<Action<None, IObjectWriter>>.Ignored))
+            A.CallTo(() => log.Log(A<SemanticLogLevel>._, A<Exception?>._, A<LogFormatter>._!))
                 .MustNotHaveHappened();
         }
 
@@ -55,7 +55,7 @@ namespace Squidex.Infrastructure.Orleans
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => sut.Invoke(context));
 
-            A.CallTo(() => log.Log(A<SemanticLogLevel>.Ignored, A<None>.Ignored, A<Action<None, IObjectWriter>>.Ignored))
+            A.CallTo(() => log.Log(A<SemanticLogLevel>._, A<Exception?>._, A<LogFormatter>._!))
                 .MustHaveHappened();
         }
     }

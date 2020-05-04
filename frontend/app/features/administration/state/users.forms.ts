@@ -6,9 +6,7 @@
  */
 
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-
 import { Form, ValidatorsEx } from '@app/shared';
-
 import { UpdateUserDto, UserDto } from './../services/users.service';
 
 export class UserForm extends Form<FormGroup, UpdateUserDto, UserDto> {
@@ -54,7 +52,7 @@ export class UserForm extends Form<FormGroup, UpdateUserDto, UserDto> {
     }
 
     protected transformLoad(user: Partial<UserDto>) {
-        const permissions = user.permissions ? user.permissions.join('\n') : '';
+        const permissions = user.permissions?.join('\n') || '';
 
         return { ...user, permissions: permissions };
     }

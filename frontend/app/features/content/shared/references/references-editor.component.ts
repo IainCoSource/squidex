@@ -8,17 +8,7 @@
 import { CdkDragDrop } from '@angular/cdk/drag-drop';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, forwardRef, Input } from '@angular/core';
 import { NG_VALUE_ACCESSOR } from '@angular/forms';
-
-import {
-    AppLanguageDto,
-    AppsState,
-    ContentDto,
-    ContentsService,
-    DialogModel,
-    sorted,
-    StatefulControlComponent,
-    Types
-} from '@app/shared';
+import { AppLanguageDto, AppsState, ContentDto, ContentsService, DialogModel, sorted, StatefulControlComponent, Types } from '@app/shared';
 
 export const SQX_REFERENCES_EDITOR_CONTROL_VALUE_ACCESSOR: any = {
     provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => ReferencesEditorComponent), multi: true
@@ -57,7 +47,8 @@ export class ReferencesEditorComponent extends StatefulControlComponent<State, R
     @Input()
     public allowDuplicates = true;
 
-    public selectorDialog = new DialogModel();
+    public contentCreatorDialog = new DialogModel();
+    public contentSelectorDialog = new DialogModel();
 
     constructor(changeDetector: ChangeDetectorRef,
         private readonly appsState: AppsState,
@@ -104,7 +95,8 @@ export class ReferencesEditorComponent extends StatefulControlComponent<State, R
             this.updateValue();
         }
 
-        this.selectorDialog.hide();
+        this.contentSelectorDialog.hide();
+        this.contentCreatorDialog.hide();
     }
 
     public remove(content: ContentDto) {

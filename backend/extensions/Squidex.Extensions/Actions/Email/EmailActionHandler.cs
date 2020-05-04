@@ -5,8 +5,10 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
+using System;
 using System.Net;
 using System.Net.Mail;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Squidex.Domain.Apps.Core.HandleRules;
@@ -43,24 +45,46 @@ namespace Squidex.Extensions.Actions.Email
 
         protected override async Task<Result> ExecuteJobAsync(EmailJob job, CancellationToken ct = default)
         {
-            using (var client = new SmtpClient(job.ServerHost, job.ServerPort))
+            await CheckConnectionAsync(job, ct);
+
+            using (var client = new SmtpClient(job.ServerHost, job.ServerPort)
             {
-                client.EnableSsl = job.ServerUseSsl;
-                client.Credentials = new NetworkCredential(job.ServerUsername, job.ServerPassword);
+                Credentials = new NetworkCredential(
+                    job.ServerUsername,
+                    job.ServerPassword),
 
-                using (var message = new MailMessage(job.MessageFrom, job.MessageTo))
+                EnableSsl = job.ServerUseSsl
+            })
+            {
+                using (ct.Register(client.SendAsyncCancel))
                 {
-                    message.Subject = job.MessageSubject;
-                    message.Body = job.MessageBody;
-
-                    using (ct.Register(client.SendAsyncCancel))
-                    {
-                        await client.SendMailAsync(message);
-                    }
+                    await client.SendMailAsync(
+                        job.MessageFrom,
+                        job.MessageTo,
+                        job.MessageSubject,
+                        job.MessageBody);
                 }
             }
 
             return Result.Complete();
+        }
+
+        private async Task CheckConnectionAsync(EmailJob job, CancellationToken ct)
+        {
+            using (var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            {
+                var tcs = new TaskCompletionSource<IAsyncResult>();
+
+                var state = socket.BeginConnect(job.ServerHost, job.ServerPort, tcs.SetResult, null);
+
+                using (ct.Register(() =>
+                {
+                    tcs.TrySetException(new OperationCanceledException($"Failed to establish a connection to {job.ServerHost}:{job.ServerPort}"));
+                }))
+                {
+                    await tcs.Task;
+                }
+            }
         }
     }
 

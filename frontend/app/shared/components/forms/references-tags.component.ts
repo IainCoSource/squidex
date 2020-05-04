@@ -7,18 +7,7 @@
 
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, forwardRef, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { FormControl, NG_VALUE_ACCESSOR } from '@angular/forms';
-
-import {
-    AppsState,
-    ContentDto,
-    ContentsService,
-    Converter,
-    getContentValue,
-    LanguageDto,
-    StatefulControlComponent,
-    TagValue,
-    UIOptions
-} from '@app/shared/internal';
+import { AppsState, ContentDto, ContentsService, Converter, getContentValue, LanguageDto, StatefulControlComponent, TagValue, UIOptions } from '@app/shared/internal';
 
 export const SQX_REFERENCES_TAGS_CONTROL_VALUE_ACCESSOR: any = {
     provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => ReferencesTagsComponent), multi: true
@@ -121,7 +110,7 @@ export class ReferencesTagsComponent extends StatefulControlComponent<State, Rea
             this.resetState();
 
             if (this.isValid) {
-                this.contentsService.getContents(this.appsState.appName, this.schemaId, this.itemCount, 0)
+                this.contentsService.getContents(this.appsState.appName, this.schemaId, { take: this.itemCount })
                     .subscribe(contents => {
                         this.contentItems = contents.items;
 

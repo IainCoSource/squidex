@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Squidex.Domain.Apps.Core;
 using Squidex.Domain.Apps.Core.ConvertContent;
 using Squidex.Domain.Apps.Core.ExtractReferenceIds;
 using Squidex.Domain.Apps.Entities.Assets.Repositories;
@@ -19,17 +20,17 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries.Steps
 {
     public sealed class ConvertData : IContentEnricherStep
     {
-        private readonly IAssetUrlGenerator assetUrlGenerator;
+        private readonly IUrlGenerator urlGenerator;
         private readonly IAssetRepository assetRepository;
         private readonly IContentRepository contentRepository;
 
-        public ConvertData(IAssetUrlGenerator assetUrlGenerator, IAssetRepository assetRepository, IContentRepository contentRepository)
+        public ConvertData(IUrlGenerator urlGenerator, IAssetRepository assetRepository, IContentRepository contentRepository)
         {
-            Guard.NotNull(assetUrlGenerator);
+            Guard.NotNull(urlGenerator);
             Guard.NotNull(assetRepository);
             Guard.NotNull(contentRepository);
 
-            this.assetUrlGenerator = assetUrlGenerator;
+            this.urlGenerator = urlGenerator;
             this.assetRepository = assetRepository;
             this.contentRepository = contentRepository;
         }
@@ -48,19 +49,7 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries.Steps
 
                 foreach (var content in group)
                 {
-                    if (content.Data != null)
-                    {
-                        content.Data = content.Data.ConvertName2Name(schema.SchemaDef, converters);
-                    }
-
-                    if (content.DataDraft != null && resolveDataDraft)
-                    {
-                        content.DataDraft = content.DataDraft.ConvertName2Name(schema.SchemaDef, converters);
-                    }
-                    else
-                    {
-                        content.DataDraft = null!;
-                    }
+                    content.Data = content.Data.ConvertName2Name(schema.SchemaDef, converters);
                 }
             }
         }
@@ -77,8 +66,7 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries.Steps
 
                     foreach (var content in group)
                     {
-                        content.Data?.AddReferencedIds(schema.SchemaDef, ids);
-                        content.DataDraft?.AddReferencedIds(schema.SchemaDef, ids);
+                        content.Data.AddReferencedIds(schema.SchemaDef, ids);
                     }
                 }
 
@@ -100,7 +88,7 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries.Steps
 
         private async Task<IEnumerable<Guid>> QueryContentIdsAsync(Context context, HashSet<Guid> ids)
         {
-            var result = await contentRepository.QueryIdsAsync(context.App.Id, ids);
+            var result = await contentRepository.QueryIdsAsync(context.App.Id, ids, context.Scope());
 
             return result.Select(x => x.Id);
         }
@@ -150,7 +138,7 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries.Steps
 
                 if (assetUrls.Any())
                 {
-                    yield return FieldConverters.ResolveAssetUrls(assetUrls.ToList(), assetUrlGenerator);
+                    yield return FieldConverters.ResolveAssetUrls(assetUrls.ToList(), urlGenerator);
                 }
             }
         }

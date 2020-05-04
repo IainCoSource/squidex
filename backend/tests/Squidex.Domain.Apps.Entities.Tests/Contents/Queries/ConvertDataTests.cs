@@ -12,7 +12,6 @@ using System.Threading.Tasks;
 using FakeItEasy;
 using Squidex.Domain.Apps.Core;
 using Squidex.Domain.Apps.Core.Contents;
-using Squidex.Domain.Apps.Core.ConvertContent;
 using Squidex.Domain.Apps.Core.Schemas;
 using Squidex.Domain.Apps.Entities.Assets.Repositories;
 using Squidex.Domain.Apps.Entities.Contents.Queries.Steps;
@@ -28,10 +27,9 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries
     public class ConvertDataTests
     {
         private readonly ISchemaEntity schema;
-        private readonly IAssetUrlGenerator assetUrlGenerator = A.Fake<IAssetUrlGenerator>();
+        private readonly IUrlGenerator urlGenerator = A.Fake<IUrlGenerator>();
         private readonly IAssetRepository assetRepository = A.Fake<IAssetRepository>();
         private readonly IContentRepository contentRepository = A.Fake<IContentRepository>();
-        private readonly Context requestContext;
         private readonly NamedId<Guid> appId = NamedId.Of(Guid.NewGuid(), "my-app");
         private readonly NamedId<Guid> schemaId = NamedId.Of(Guid.NewGuid(), "my-schema");
         private readonly ProvideSchema schemaProvider;
@@ -39,8 +37,6 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries
 
         public ConvertDataTests()
         {
-            requestContext = new Context(Mocks.ApiUser(), Mocks.App(appId));
-
             var schemaDef =
                 new Schema("my-schema")
                     .AddReferences(1, "references", Partitioning.Invariant)
@@ -51,18 +47,7 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries
             schema = Mocks.Schema(appId, schemaId, schemaDef);
             schemaProvider = x => Task.FromResult(schema);
 
-            sut = new ConvertData(assetUrlGenerator, assetRepository, contentRepository);
-        }
-
-        [Fact]
-        public async Task Should_convert_data_only()
-        {
-            var content = CreateContent(new NamedContentData());
-
-            await sut.EnrichAsync(requestContext, Enumerable.Repeat(content, 1), schemaProvider);
-
-            Assert.NotNull(content.Data);
-            Assert.Null(content.DataDraft);
+            sut = new ConvertData(urlGenerator, assetRepository, contentRepository);
         }
 
         [Fact]
@@ -75,7 +60,6 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries
             await sut.EnrichAsync(ctx, Enumerable.Repeat(content, 1), schemaProvider);
 
             Assert.NotNull(content.Data);
-            Assert.NotNull(content.DataDraft);
         }
 
         [Fact]
@@ -106,7 +90,7 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries
             A.CallTo(() => assetRepository.QueryIdsAsync(appId.Id, A<HashSet<Guid>>.That.Is(id1, id2)))
                 .Returns(new List<Guid> { id2 });
 
-            A.CallTo(() => contentRepository.QueryIdsAsync(appId.Id, A<HashSet<Guid>>.That.Is(id1, id2)))
+            A.CallTo(() => contentRepository.QueryIdsAsync(appId.Id, A<HashSet<Guid>>.That.Is(id1, id2), SearchScope.All))
                 .Returns(new List<(Guid, Guid)> { (id2, id2) });
 
             var ctx = new Context(Mocks.FrontendUser(), Mocks.App(appId));
@@ -114,7 +98,6 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries
             await sut.EnrichAsync(ctx, Enumerable.Repeat(content, 1), schemaProvider);
 
             Assert.Equal(expected, content.Data);
-            Assert.Equal(expected, content.DataDraft);
         }
 
         [Fact]
@@ -145,7 +128,7 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries
             A.CallTo(() => assetRepository.QueryIdsAsync(appId.Id, A<HashSet<Guid>>.That.Is(id1, id2)))
                 .Returns(new List<Guid>());
 
-            A.CallTo(() => contentRepository.QueryIdsAsync(appId.Id, A<HashSet<Guid>>.That.Is(id1, id2)))
+            A.CallTo(() => contentRepository.QueryIdsAsync(appId.Id, A<HashSet<Guid>>.That.Is(id1, id2), SearchScope.All))
                 .Returns(new List<(Guid, Guid)>());
 
             var ctx = new Context(Mocks.FrontendUser(), Mocks.App(appId));
@@ -153,7 +136,6 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries
             await sut.EnrichAsync(ctx, Enumerable.Repeat(content, 1), schemaProvider);
 
             Assert.Equal(expected, content.Data);
-            Assert.Equal(expected, content.DataDraft);
         }
 
         private static NamedContentData BuildTestData(Guid id1, Guid id2)
@@ -177,10 +159,9 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries
         {
             return new ContentEntity
             {
-                Status = Status.Published,
                 Data = data,
-                DataDraft = data,
-                SchemaId = schemaId
+                SchemaId = schemaId,
+                Status = Status.Published
             };
         }
     }

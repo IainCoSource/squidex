@@ -8,6 +8,7 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 using Google;
@@ -48,6 +49,27 @@ namespace Squidex.Infrastructure.Assets
             return null;
         }
 
+        public async Task<long> GetSizeAsync(string fileName, CancellationToken ct = default)
+        {
+            Guard.NotNullOrEmpty(fileName);
+
+            try
+            {
+                var obj = await storageClient.GetObjectAsync(bucketName, fileName, null, ct);
+
+                if (!obj.Size.HasValue)
+                {
+                    throw new AssetNotFoundException(fileName);
+                }
+
+                return (long)obj.Size.Value;
+            }
+            catch (GoogleApiException ex) when (ex.HttpStatusCode == HttpStatusCode.NotFound)
+            {
+                throw new AssetNotFoundException(fileName, ex);
+            }
+        }
+
         public async Task CopyAsync(string sourceFileName, string targetFileName, CancellationToken ct = default)
         {
             Guard.NotNullOrEmpty(sourceFileName);
@@ -67,13 +89,20 @@ namespace Squidex.Infrastructure.Assets
             }
         }
 
-        public async Task DownloadAsync(string fileName, Stream stream, CancellationToken ct = default)
+        public async Task DownloadAsync(string fileName, Stream stream, BytesRange range = default, CancellationToken ct = default)
         {
             Guard.NotNullOrEmpty(fileName);
 
             try
             {
-                await storageClient.DownloadObjectAsync(bucketName, fileName, stream, cancellationToken: ct);
+                var downloadOptions = new DownloadObjectOptions();
+
+                if (range.IsDefined)
+                {
+                    downloadOptions.Range = new RangeHeaderValue(range.From, range.To);
+                }
+
+                await storageClient.DownloadObjectAsync(bucketName, fileName, stream, downloadOptions, ct);
             }
             catch (GoogleApiException ex) when (ex.HttpStatusCode == HttpStatusCode.NotFound)
             {

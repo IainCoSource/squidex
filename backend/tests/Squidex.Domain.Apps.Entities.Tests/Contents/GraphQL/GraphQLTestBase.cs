@@ -88,6 +88,10 @@ namespace Squidex.Domain.Apps.Entities.Contents.GraphQL
                         .AddBoolean(121, "nested-boolean")
                         .AddNumber(122, "nested-number")
                         .AddNumber(123, "nested_number"))
+                    .AddNumber(14, "2_numbers", Partitioning.Invariant,
+                        new NumberFieldProperties())
+                    .AddNumber(15, "2-numbers", Partitioning.Invariant,
+                        new NumberFieldProperties())
                     .SetScripts(new SchemaScripts { Query = "<query-script>" });
 
             schema = Mocks.Schema(appId, schemaId, schemaDef);
@@ -111,7 +115,7 @@ namespace Squidex.Domain.Apps.Entities.Contents.GraphQL
             sut = CreateSut();
         }
 
-        protected IEnrichedContentEntity CreateContent(Guid id, Guid refId, Guid assetId, NamedContentData? data = null, NamedContentData? dataDraft = null)
+        protected IEnrichedContentEntity CreateContent(Guid id, Guid refId, Guid assetId, NamedContentData? data = null)
         {
             var now = SystemClock.Instance.GetCurrentInstant();
 
@@ -123,6 +127,12 @@ namespace Squidex.Domain.Apps.Entities.Contents.GraphQL
                     .AddField("my-assets",
                         new ContentFieldData()
                             .AddValue("iv", JsonValue.Array(assetId.ToString())))
+                    .AddField("2_numbers",
+                        new ContentFieldData()
+                            .AddValue("iv", 22))
+                    .AddField("2-numbers",
+                        new ContentFieldData()
+                            .AddValue("iv", 23))
                     .AddField("my-number",
                         new ContentFieldData()
                             .AddValue("iv", 1.0))
@@ -174,7 +184,6 @@ namespace Squidex.Domain.Apps.Entities.Contents.GraphQL
                 LastModified = now,
                 LastModifiedBy = new RefToken(RefTokenType.Subject, "user2"),
                 Data = data,
-                DataDraft = dataDraft!,
                 SchemaId = schemaId,
                 Status = Status.Draft,
                 StatusColor = "red"
@@ -202,7 +211,6 @@ namespace Squidex.Domain.Apps.Entities.Contents.GraphQL
                 LastModified = now,
                 LastModifiedBy = new RefToken(RefTokenType.Subject, "user2"),
                 Data = data,
-                DataDraft = data,
                 SchemaId = schemaId,
                 Status = Status.Draft,
                 StatusColor = "red"
@@ -274,10 +282,10 @@ namespace Squidex.Domain.Apps.Entities.Contents.GraphQL
                 [typeof(IAssetQueryService)] = assetQuery,
                 [typeof(IContentQueryService)] = contentQuery,
                 [typeof(IDataLoaderContextAccessor)] = dataLoaderContext,
-                [typeof(IGraphQLUrlGenerator)] = new FakeUrlGenerator(),
                 [typeof(IOptions<AssetOptions>)] = Options.Create(new AssetOptions()),
                 [typeof(IOptions<ContentOptions>)] = Options.Create(new ContentOptions()),
                 [typeof(ISemanticLog)] = A.Fake<ISemanticLog>(),
+                [typeof(IUrlGenerator)] = new FakeUrlGenerator(),
                 [typeof(DataLoaderDocumentListener)] = new DataLoaderDocumentListener(dataLoaderContext)
             };
 

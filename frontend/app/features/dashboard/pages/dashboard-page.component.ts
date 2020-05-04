@@ -6,18 +6,8 @@
  */
 
 import { Component, OnInit } from '@angular/core';
+import { AppsState, AuthService, DateTime, fadeAnimation, HistoryEventDto, HistoryService, LocalStoreService, ResourceOwner, UsagesService } from '@app/shared';
 import { switchMap } from 'rxjs/operators';
-
-import {
-    AppsState,
-    AuthService,
-    DateTime,
-    fadeAnimation,
-    HistoryEventDto,
-    HistoryService,
-    ResourceOwner,
-    UsagesService
-} from '@app/shared';
 
 const COLORS: ReadonlyArray<string> = [
     ' 51, 137, 213',
@@ -42,14 +32,7 @@ const COLORS: ReadonlyArray<string> = [
     ]
 })
 export class DashboardPageComponent extends ResourceOwner implements OnInit {
-    public profileDisplayName = '';
-
-    public chartStorageCount: any;
-    public chartStorageSize: any;
-    public chartCallsCount: any;
-    public chartCallsPerformance: any;
-
-    public isPerformanceStacked = false;
+    private isStackedValue: boolean;
 
     public chartOptions = {
         responsive: true,
@@ -87,19 +70,42 @@ export class DashboardPageComponent extends ResourceOwner implements OnInit {
 
     public history: ReadonlyArray<HistoryEventDto> = [];
 
-    public assetsCurrent = 0;
-    public assetsMax = 0;
+    public profileDisplayName = '';
 
+    public chartStorageCount: any;
+    public chartStorageSize: any;
+    public chartCallsCount: any;
+    public chartCallsBytes: any;
+    public chartCallsPerformance: any;
+
+    public storageCurrent = 0;
+    public storageAllowed = 0;
+
+    public callsPerformance = 0;
     public callsCurrent = 0;
-    public callsMax = 0;
+    public callsAllowed = 0;
+    public callsBytes = 0;
+
+    public get isStacked() {
+        return this.isStackedValue;
+    }
+
+    public set isStacked(value: boolean) {
+        this.localStore.setBoolean('dashboard.charts.stacked', value);
+
+        this.isStackedValue = value;
+    }
 
     constructor(
         public readonly appsState: AppsState,
         public readonly authState: AuthService,
         private readonly historyService: HistoryService,
-        private readonly usagesService: UsagesService
+        private readonly usagesService: UsagesService,
+        private readonly localStore: LocalStoreService
     ) {
         super();
+
+        this.isStackedValue = localStore.getBoolean('dashboard.charts.stacked');
     }
 
     public ngOnInit() {
@@ -107,16 +113,8 @@ export class DashboardPageComponent extends ResourceOwner implements OnInit {
             this.appsState.selectedApp.pipe(
                     switchMap(app => this.usagesService.getTodayStorage(app.name)))
                 .subscribe(dto => {
-                    this.assetsCurrent = dto.size;
-                    this.assetsMax = dto.maxAllowed;
-                }));
-
-        this.own(
-            this.appsState.selectedApp.pipe(
-                    switchMap(app => this.usagesService.getMonthCalls(app.name)))
-                .subscribe(dto => {
-                    this.callsCurrent = dto.count;
-                    this.callsMax = dto.maxAllowed;
+                    this.storageCurrent = dto.size;
+                    this.storageAllowed = dto.maxAllowed;
                 }));
 
         this.own(
@@ -126,9 +124,12 @@ export class DashboardPageComponent extends ResourceOwner implements OnInit {
                     this.history = dto;
                 }));
 
+        const dateTo = DateTime.today().toStringFormat('yyyy-MM-dd');
+        const dateFrom = DateTime.today().addDays(-20).toStringFormat('yyyy-MM-dd');
+
         this.own(
             this.appsState.selectedApp.pipe(
-                    switchMap(app => this.usagesService.getStorageUsages(app.name, DateTime.today().addDays(-20), DateTime.today())))
+                    switchMap(app => this.usagesService.getStorageUsages(app.name, dateFrom, dateTo)))
                 .subscribe(dtos => {
                     const labels = createLabels(dtos);
 
@@ -142,7 +143,7 @@ export class DashboardPageComponent extends ResourceOwner implements OnInit {
                                 backgroundColor: `rgba(${COLORS[0]}, 0.6)`,
                                 borderColor: `rgba(${COLORS[0]}, 1)`,
                                 borderWidth: 1,
-                                data: dtos.map(x => x.count)
+                                data: dtos.map(x => x.totalCount)
                             }
                         ]
                     };
@@ -157,7 +158,7 @@ export class DashboardPageComponent extends ResourceOwner implements OnInit {
                                 backgroundColor: `rgba(${COLORS[0]}, 0.6)`,
                                 borderColor: `rgba(${COLORS[0]}, 1)`,
                                 borderWidth: 1,
-                                data: dtos.map(x => Math.round(100 * (x.size / (1024 * 1024))) / 100)
+                                data: dtos.map(x => Math.round(100 * (x.totalSize / (1024 * 1024))) / 100)
                             }
                         ]
                     };
@@ -165,33 +166,50 @@ export class DashboardPageComponent extends ResourceOwner implements OnInit {
 
         this.own(
             this.appsState.selectedApp.pipe(
-                    switchMap(app => this.usagesService.getCallsUsages(app.name, DateTime.today().addDays(-20), DateTime.today())))
-                .subscribe(dtos => {
-                    const labels = createLabelsFromSet(dtos);
+                    switchMap(app => this.usagesService.getCallsUsages(app.name, dateFrom, dateTo)))
+                .subscribe(({ details, totalBytes, totalCalls, allowedCalls, averageElapsedMs }) => {
+                    const labels = createLabelsFromSet(details);
 
                     this.chartCallsCount = {
                         labels,
-                        datasets: Object.keys(dtos).map((k, i) => (
+                        datasets: Object.keys(details).map((k, i) => (
                             {
                                 label: label(k),
                                 backgroundColor: `rgba(${COLORS[i]}, 0.6)`,
                                 borderColor: `rgba(${COLORS[i]}, 1)`,
                                 borderWidth: 1,
-                                data: dtos[k].map(x => x.count)
+                                data: details[k].map(x => x.totalCalls)
+                            }))
+                    };
+
+                    this.chartCallsBytes = {
+                        labels,
+                        datasets: Object.keys(details).map((k, i) => (
+                            {
+                                label: label(k),
+                                backgroundColor: `rgba(${COLORS[i]}, 0.6)`,
+                                borderColor: `rgba(${COLORS[i]}, 1)`,
+                                borderWidth: 1,
+                                data: details[k].map(x => Math.round(100 * (x.totalBytes / (1024 * 1024))) / 100)
                             }))
                     };
 
                     this.chartCallsPerformance = {
                         labels,
-                        datasets: Object.keys(dtos).map((k, i) => (
+                        datasets: Object.keys(details).map((k, i) => (
                             {
                                 label: label(k),
                                 backgroundColor: `rgba(${COLORS[i]}, 0.6)`,
                                 borderColor: `rgba(${COLORS[i]}, 1)`,
                                 borderWidth: 1,
-                                data: dtos[k].map(x => x.averageMs)
+                                data: details[k].map(x => x.averageElapsedMs)
                             }))
                     };
+
+                    this.callsPerformance = averageElapsedMs;
+                    this.callsBytes = totalBytes;
+                    this.callsCurrent = totalCalls;
+                    this.callsAllowed = allowedCalls;
                 }));
     }
 
@@ -208,7 +226,7 @@ function label(category: string) {
 }
 
 function createLabels(dtos: ReadonlyArray<{ date: DateTime }>): ReadonlyArray<string> {
-    return dtos.map(d => d.date.toStringFormat('M-DD'));
+    return dtos.map(d => d.date.toStringFormat('M-dd'));
 }
 
 function createLabelsFromSet(dtos: { [category: string]: ReadonlyArray<{ date: DateTime }> }): ReadonlyArray<string> {

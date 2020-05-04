@@ -20,7 +20,7 @@ namespace Squidex.Domain.Apps.Entities.Backup
 
         public DefaultBackupArchiveStore(IAssetStore assetStore)
         {
-            Guard.NotNull(assetStore, nameof(assetStore));
+            Guard.NotNull(assetStore);
 
             this.assetStore = assetStore;
         }
@@ -29,7 +29,7 @@ namespace Squidex.Domain.Apps.Entities.Backup
         {
             var fileName = GetFileName(backupId);
 
-            return assetStore.DownloadAsync(fileName, stream, ct);
+            return assetStore.DownloadAsync(fileName, stream, default, ct);
         }
 
         public Task UploadAsync(Guid backupId, Stream stream, CancellationToken ct = default)

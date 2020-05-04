@@ -6,7 +6,7 @@
 // ==========================================================================
 
 using System.ComponentModel.DataAnnotations;
-using Squidex.Domain.Apps.Entities.Apps.Services;
+using Squidex.Domain.Apps.Entities.Apps.Plans;
 using Squidex.Infrastructure.Reflection;
 
 namespace Squidex.Areas.Api.Controllers.Plans.Models
@@ -30,6 +30,16 @@ namespace Squidex.Areas.Api.Controllers.Plans.Models
         /// </summary>
         [Required]
         public string Costs { get; set; }
+
+        /// <summary>
+        /// An optional confirm text for the monthly subscription.
+        /// </summary>
+        public string? ConfirmText { get; set; }
+
+        /// <summary>
+        /// An optional confirm text for the yearly subscription.
+        /// </summary>
+        public string? YearlyConfirmText { get; set; }
 
         /// <summary>
         /// The yearly costs of the plan.

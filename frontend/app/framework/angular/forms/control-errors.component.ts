@@ -6,15 +6,9 @@
  */
 
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Host, Input, OnChanges, OnDestroy, Optional } from '@angular/core';
-import { AbstractControl, FormGroupDirective } from '@angular/forms';
+import { AbstractControl, FormArray, FormGroupDirective } from '@angular/forms';
+import { fadeAnimation, StatefulComponent, Types } from '@app/framework/internal';
 import { merge } from 'rxjs';
-
-import {
-    fadeAnimation,
-    StatefulComponent,
-    Types
-} from '@app/framework/internal';
-
 import { formatError } from './error-formatting';
 
 interface State {
@@ -123,7 +117,7 @@ export class ControlErrorsComponent extends StatefulComponent<State> implements 
     private createMessages() {
         const errors: string[] = [];
 
-        if (this.control && this.control.invalid && ((this.control.touched && !this.submitOnly) || this.submitted) && this.control.errors) {
+        if (this.control && this.control.invalid && ((this.isTouched() && !this.submitOnly) || this.submitted) && this.control.errors) {
             for (const key in <any>this.control.errors) {
                 if (this.control.errors.hasOwnProperty(key)) {
                     const message = formatError(this.displayFieldName, key, this.control.errors[key], this.control.value, this.errors);
@@ -138,5 +132,9 @@ export class ControlErrorsComponent extends StatefulComponent<State> implements 
         if (errors.length !== this.snapshot.errorMessages.length || errors.length > 0) {
             this.next(s => ({ ...s, errorMessages: errors }));
         }
+    }
+
+    private isTouched() {
+        return this.control.touched || Types.is(this.control, FormArray);
     }
 }

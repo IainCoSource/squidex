@@ -7,14 +7,10 @@
 
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, forwardRef, Input, ViewChild } from '@angular/core';
 import { NG_VALUE_ACCESSOR } from '@angular/forms';
+import { ResourceLoaderService, StatefulControlComponent, Types } from '@app/framework/internal';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-
-import {
-    ResourceLoaderService,
-    StatefulControlComponent,
-    Types
-} from '@app/framework/internal';
+import { FocusComponent } from './../forms-helper';
 
 declare var ace: any;
 
@@ -31,7 +27,7 @@ export const SQX_CODE_EDITOR_CONTROL_VALUE_ACCESSOR: any = {
     ],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class CodeEditorComponent extends StatefulControlComponent<undefined, string> implements AfterViewInit {
+export class CodeEditorComponent extends StatefulControlComponent<undefined, string> implements AfterViewInit, FocusComponent {
     private valueChanged = new Subject();
     private aceEditor: any;
     private value: string;
@@ -68,6 +64,12 @@ export class CodeEditorComponent extends StatefulControlComponent<undefined, str
 
         if (this.aceEditor) {
             this.aceEditor.setReadOnly(isDisabled);
+        }
+    }
+
+    public focus() {
+        if (this.aceEditor) {
+            this.aceEditor.focus();
         }
     }
 

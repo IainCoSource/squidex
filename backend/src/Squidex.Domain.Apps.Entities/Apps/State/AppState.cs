@@ -6,7 +6,6 @@
 // ==========================================================================
 
 using System;
-using System.Runtime.Serialization;
 using Squidex.Domain.Apps.Core.Apps;
 using Squidex.Domain.Apps.Core.Contents;
 using Squidex.Domain.Apps.Events.Apps;
@@ -22,40 +21,28 @@ namespace Squidex.Domain.Apps.Entities.Apps.State
     [CollectionName("Apps")]
     public class AppState : DomainObjectState<AppState>, IAppEntity
     {
-        [DataMember]
         public string Name { get; set; }
 
-        [DataMember]
         public string Label { get; set; }
 
-        [DataMember]
         public string Description { get; set; }
 
-        [DataMember]
         public Roles Roles { get; set; } = Roles.Empty;
 
-        [DataMember]
-        public AppPlan? Plan { get; set; }
-
-        [DataMember]
         public AppImage? Image { get; set; }
 
-        [DataMember]
+        public AppPlan? Plan { get; set; }
+
         public AppClients Clients { get; set; } = AppClients.Empty;
 
-        [DataMember]
         public AppPatterns Patterns { get; set; } = AppPatterns.Empty;
 
-        [DataMember]
         public AppContributors Contributors { get; set; } = AppContributors.Empty;
 
-        [DataMember]
         public LanguagesConfig LanguagesConfig { get; set; } = LanguagesConfig.English;
 
-        [DataMember]
         public Workflows Workflows { get; set; } = Workflows.Empty;
 
-        [DataMember]
         public bool IsArchived { get; set; }
 
         public override bool ApplyEvent(IEvent @event)
@@ -83,7 +70,7 @@ namespace Squidex.Domain.Apps.Entities.Apps.State
                     return UpdateImage(e, ev => null);
 
                 case AppPlanChanged e when Is.Change(Plan?.PlanId, e.PlanId):
-                    return UpdatePlan(e, ev => AppPlan.Build(ev.Actor, ev.PlanId));
+                    return UpdatePlan(e, ev => new AppPlan(ev.Actor, ev.PlanId));
 
                 case AppPlanReset e when Plan != null:
                     return UpdatePlan(e, ev => null);

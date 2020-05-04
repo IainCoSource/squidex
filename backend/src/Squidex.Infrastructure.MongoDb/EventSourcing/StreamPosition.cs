@@ -5,12 +5,17 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
+using System.Text;
+using Microsoft.Extensions.ObjectPool;
 using MongoDB.Bson;
 
 namespace Squidex.Infrastructure.EventSourcing
 {
     internal sealed class StreamPosition
     {
+        private static readonly ObjectPool<StringBuilder> StringBuilderPool =
+            new DefaultObjectPool<StringBuilder>(new StringBuilderPooledObjectPolicy());
+
         private static readonly BsonTimestamp EmptyTimestamp = new BsonTimestamp(946681200, 0);
 
         public BsonTimestamp Timestamp { get; }
@@ -34,15 +39,23 @@ namespace Squidex.Infrastructure.EventSourcing
 
         public static implicit operator string(StreamPosition position)
         {
-            var parts = new object[]
+            var sb = StringBuilderPool.Get();
+            try
             {
-                position.Timestamp.Timestamp,
-                position.Timestamp.Increment,
-                position.CommitOffset,
-                position.CommitSize
-            };
+                sb.Append(position.Timestamp.Timestamp);
+                sb.Append("-");
+                sb.Append(position.Timestamp.Increment);
+                sb.Append("-");
+                sb.Append(position.CommitOffset);
+                sb.Append("-");
+                sb.Append(position.CommitSize);
 
-            return string.Join("-", parts);
+                return sb.ToString();
+            }
+            finally
+            {
+                StringBuilderPool.Return(sb);
+            }
         }
 
         public static implicit operator StreamPosition(string? position)
@@ -51,7 +64,10 @@ namespace Squidex.Infrastructure.EventSourcing
             {
                 var parts = position.Split('-');
 
-                return new StreamPosition(new BsonTimestamp(int.Parse(parts[0]), int.Parse(parts[1])), long.Parse(parts[2]), long.Parse(parts[3]));
+                return new StreamPosition(
+                    new BsonTimestamp(int.Parse(parts[0]), int.Parse(parts[1])),
+                    long.Parse(parts[2]),
+                    long.Parse(parts[3]));
             }
 
             return new StreamPosition(EmptyTimestamp, -1, -1);

@@ -6,21 +6,9 @@
  */
 
 import { DateTime, Duration } from '@app/framework/internal';
+import { DatePipe, DayOfWeekPipe, DayPipe, DurationPipe, FromNowPipe, FullDateTimePipe, ISODatePipe, MonthPipe, ShortDatePipe, ShortTimePipe } from './date-time.pipes';
 
-import {
-    DatePipe,
-    DayOfWeekPipe,
-    DayPipe,
-    DurationPipe,
-    FromNowPipe,
-    FullDateTimePipe,
-    ISODatePipe,
-    MonthPipe,
-    ShortDatePipe,
-    ShortTimePipe
-} from './date-time.pipes';
-
-const dateTime = DateTime.parse('2013-10-03T12:13:14.125', DateTime.iso8601());
+const dateTime = DateTime.parseISO('2013-10-03T12:13:14.125', false);
 
 describe('DurationPipe', () => {
     it('should format to standard duration string', () => {
@@ -86,7 +74,7 @@ describe('DayOfWeekPipe', () => {
         const pipe = new DayOfWeekPipe();
 
         const actual = pipe.transform(dateTime);
-        const expected = 'Th';
+        const expected = 'Thu';
 
         expect(actual).toBe(expected);
     });
@@ -105,7 +93,7 @@ describe('FromNowPipe', () => {
         const pipe = new FromNowPipe();
 
         const actual = pipe.transform(DateTime.now().addMinutes(-4));
-        const expected = '4 minutes ago';
+        const expected = '4 minutes';
 
         expect(actual).toBe(expected);
     });
@@ -124,7 +112,7 @@ describe('FullDateTimePipe', () => {
         const pipe = new FullDateTimePipe();
 
         const actual = pipe.transform(dateTime);
-        const expected = 'Thursday, October 3, 2013 12:13 PM';
+        const expected = 'Oct 3, 2013, 12:13:14 PM';
 
         expect(actual).toBe(expected);
     });

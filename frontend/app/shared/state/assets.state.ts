@@ -6,27 +6,10 @@
  */
 
 import { Injectable } from '@angular/core';
+import { compareStrings, DialogService, LocalStoreService, MathHelper, Pager, shareSubscribed, State } from '@app/framework';
 import { empty, forkJoin, Observable, of, throwError } from 'rxjs';
 import { catchError, finalize, tap } from 'rxjs/operators';
-
-import {
-    compareStrings,
-    DialogService,
-    LocalStoreService,
-    MathHelper,
-    Pager,
-    shareSubscribed,
-    State
-} from '@app/framework';
-
-import {
-    AnnotateAssetDto,
-    AssetDto,
-    AssetFolderDto,
-    AssetsService,
-    RenameAssetFolderDto
-} from './../services/assets.service';
-
+import { AnnotateAssetDto, AssetDto, AssetFolderDto, AssetsService, RenameAssetFolderDto } from './../services/assets.service';
 import { AppsState } from './apps.state';
 import { Query } from './query';
 
@@ -162,14 +145,27 @@ export class AssetsState extends State<Snapshot> {
     private loadInternal(isReload: boolean): Observable<any> {
         this.next({ isLoading: true });
 
+        const query: any = {
+            take: this.snapshot.assetsPager.pageSize,
+            skip: this.snapshot.assetsPager.skip
+        };
+
+        if (this.parentId) {
+            query.parentId = this.parentId;
+        }
+
+        if (this.snapshot.assetsQuery) {
+            query.query = this.snapshot.assetsQuery;
+        }
+
         const searchTags = Object.keys(this.snapshot.tagsSelected);
 
+        if (searchTags.length > 0) {
+            query.tags = searchTags;
+        }
+
         const assets$ =
-            this.assetsService.getAssets(this.appName,
-                this.snapshot.assetsPager.pageSize,
-                this.snapshot.assetsPager.skip,
-                this.snapshot.assetsQuery,
-                searchTags, undefined, this.parentId);
+            this.assetsService.getAssets(this.appName, query);
 
         const assetFolders$ =
             this.snapshot.path.length === 0 ?

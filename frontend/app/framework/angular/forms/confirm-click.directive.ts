@@ -8,7 +8,6 @@
 // tslint:disable: readonly-array
 
 import { Directive, EventEmitter, HostListener, Input, OnDestroy, Output } from '@angular/core';
-
 import { DialogService } from '@app/framework/internal';
 
 class DelayEventEmitter<T> extends EventEmitter<T> {
@@ -79,10 +78,10 @@ export class ConfirmClickDirective implements OnDestroy {
 
             const subscription =
                 this.dialogs.confirm(this.confirmTitle, this.confirmText)
-                    .subscribe(result => {
+                    .subscribe(confiormed => {
                         this.isOpen = false;
 
-                        if (result) {
+                        if (confiormed) {
                             this.clickConfirmed.delayEmit();
                         }
 

@@ -7,17 +7,11 @@
 
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, forwardRef, Input, OnInit, ViewChild } from '@angular/core';
 import { FormControl, NG_VALUE_ACCESSOR } from '@angular/forms';
-import * as moment from 'moment';
-
-import {
-    StatefulControlComponent,
-    Types,
-    UIOptions
-} from '@app/framework/internal';
+import { DateHelper, DateTime, StatefulControlComponent, UIOptions } from '@app/framework/internal';
+import * as Pikaday from 'pikaday/pikaday';
+import { FocusComponent } from './../forms-helper';
 
 declare module 'pikaday/pikaday';
-
-import * as Pikaday from 'pikaday/pikaday';
 
 export const SQX_DATE_TIME_EDITOR_CONTROL_VALUE_ACCESSOR: any = {
     provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => DateTimeEditorComponent), multi: true
@@ -34,10 +28,9 @@ const NO_EMIT = { emitEvent: false };
     ],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class DateTimeEditorComponent extends StatefulControlComponent<{}, string | null> implements OnInit, AfterViewInit {
+export class DateTimeEditorComponent extends StatefulControlComponent<{}, string | null> implements OnInit, AfterViewInit, FocusComponent {
     private picker: any;
-    private timeValue: moment.Moment | null = null;
-    private dateValue: moment.Moment | null = null;
+    private dateTime: DateTime | null;
     private hideDateButtonsSettings: boolean;
     private suppressEvents = false;
 
@@ -54,7 +47,7 @@ export class DateTimeEditorComponent extends StatefulControlComponent<{}, string
     public hideDateButtons: boolean;
 
     @ViewChild('dateInput', { static: false })
-    public dateInput: ElementRef;
+    public dateInput: ElementRef<HTMLInputElement>;
 
     public timeControl = new FormControl();
     public dateControl = new FormControl();
@@ -68,7 +61,7 @@ export class DateTimeEditorComponent extends StatefulControlComponent<{}, string
     }
 
     public get hasValue() {
-        return !!this.dateValue;
+        return !!this.dateTime;
     }
 
     constructor(changeDetector: ChangeDetectorRef, uiOptions: UIOptions) {
@@ -79,40 +72,21 @@ export class DateTimeEditorComponent extends StatefulControlComponent<{}, string
 
     public ngOnInit() {
         this.own(
-            this.timeControl.valueChanges.subscribe(value => {
-                if (!value || value.length === 0) {
-                    this.timeValue = null;
-                } else {
-                    this.timeValue = moment.utc(value, 'HH:mm:ss');
-                }
-
+            this.timeControl.valueChanges.subscribe(() => {
                 this.callChangeFormatted();
             }));
 
         this.own(
-            this.dateControl.valueChanges.subscribe(value => {
-                if (!value || value.length === 0) {
-                    this.dateValue = null;
-                } else {
-                    this.dateValue = moment.utc(value, 'YYYY-MM-DD');
-                }
-
+            this.dateControl.valueChanges.subscribe(() => {
                 this.callChangeFormatted();
             }));
     }
 
     public writeValue(obj: any) {
-        if (Types.isString(obj) && obj.length > 0) {
-            const parsed = moment.parseZone(obj);
-
-            this.dateValue = parsed;
-
-            if (this.showTime) {
-                this.timeValue = parsed;
-            }
-        } else {
-            this.timeValue = null;
-            this.dateValue = null;
+        try {
+            this.dateTime = DateTime.parseISO(obj);
+        } catch (ex) {
+            this.dateTime = null;
         }
 
         this.updateControls();
@@ -130,12 +104,8 @@ export class DateTimeEditorComponent extends StatefulControlComponent<{}, string
         }
     }
 
-    public registerOnChange(fn: any) {
-        this.callChange = fn;
-    }
-
-    public registerOnTouched(fn: any) {
-        this.callTouched = fn;
+    public focus() {
+        this.dateInput.nativeElement.focus();
     }
 
     public ngAfterViewInit() {
@@ -144,9 +114,9 @@ export class DateTimeEditorComponent extends StatefulControlComponent<{}, string
                 if (this.suppressEvents) {
                     return;
                 }
-                this.dateValue = this.picker.getMoment();
 
-                this.callChangeFormatted();
+                this.dateControl.setValue(this.picker.toString('YYYY-MM-DD'));
+
                 this.callTouched();
             }
         });
@@ -155,7 +125,7 @@ export class DateTimeEditorComponent extends StatefulControlComponent<{}, string
     }
 
     public writeNow() {
-        this.writeValue(new Date().toUTCString());
+        this.writeValue(DateTime.now().toISOString());
 
         this.updateControls();
         this.callChangeFormatted();
@@ -165,10 +135,9 @@ export class DateTimeEditorComponent extends StatefulControlComponent<{}, string
     }
 
     public reset() {
-        this.timeControl.setValue(null, NO_EMIT);
-        this.dateControl.setValue(null, NO_EMIT);
+        this.dateTime = null;
 
-        this.dateValue = null;
+        this.updateControls();
 
         this.callChange(null);
         this.callTouched();
@@ -181,22 +150,28 @@ export class DateTimeEditorComponent extends StatefulControlComponent<{}, string
     }
 
     private getValue(): string | null {
-        if (!this.dateValue || !this.dateValue.isValid()) {
+        if (!this.dateControl.value) {
             return null;
         }
 
-        if (this.timeValue && !this.timeValue.isValid()) {
-            return null;
+        let result: string | null = null;
+
+        if (this.showTime && this.timeControl.value) {
+            const combined = `${this.dateControl.value}T${this.timeControl.value}`;
+
+            const parsed = DateTime.tryParseISO(combined, true);
+
+            if (parsed) {
+                result = parsed.toISOString();
+            }
         }
 
-        let result = this.dateValue.format('YYYY-MM-DD');
+        if (!result) {
+            const parsed = DateTime.tryParseISO(this.dateControl.value, true);
 
-        if (this.showTime && this.timeValue) {
-            result += 'T';
-            result += this.timeValue.format('HH:mm:ss');
-            result += 'Z';
-        } else if (this.enforceTime) {
-            result += 'T00:00:00Z';
+            if (parsed) {
+                result = parsed.toISOString();
+            }
         }
 
         return result;
@@ -205,19 +180,18 @@ export class DateTimeEditorComponent extends StatefulControlComponent<{}, string
     private updateControls() {
         this.suppressEvents = true;
 
-        if (this.timeValue && this.timeValue.isValid()) {
-            this.timeControl.setValue(this.timeValue.format('HH:mm:ss'), NO_EMIT);
+        if (this.dateTime && this.mode === 'DateTime') {
+            this.timeControl.setValue(this.dateTime.toStringFormatUTC('HH:mm:ss'), NO_EMIT);
         } else {
             this.timeControl.setValue(null, NO_EMIT);
         }
 
-        if (this.dateValue && this.dateValue.isValid() && this.picker) {
-            const dateString = this.dateValue.format('YYYY-MM-DD');
-            const dateLocal = moment(dateString);
+        if (this.dateTime && this.picker) {
+            const dateString = this.dateTime.toStringFormatUTC('yyyy-MM-dd');
+
+            this.picker.setDate(DateHelper.getUTCDate(this.dateTime.raw), true);
 
             this.dateControl.setValue(dateString, NO_EMIT);
-
-            this.picker.setMoment(dateLocal);
         } else {
             this.dateControl.setValue(null, NO_EMIT);
         }

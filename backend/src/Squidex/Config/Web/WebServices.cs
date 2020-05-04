@@ -46,6 +46,12 @@ namespace Squidex.Config.Web
             services.AddSingletonAs<LocalCacheMiddleware>()
                 .AsSelf();
 
+            services.AddSingletonAs<UsageMiddleware>()
+                .AsSelf();
+
+            services.AddSingletonAs<RequestExceptionMiddleware>()
+                .AsSelf();
+
             services.AddSingletonAs<RequestLogPerformanceMiddleware>()
                 .AsSelf();
 
@@ -73,6 +79,7 @@ namespace Squidex.Config.Web
                 options.Filters.Add<AppResolver>();
                 options.Filters.Add<MeasureResultFilter>();
             })
+            .AddRazorRuntimeCompilation()
             .AddSquidexPlugins(config)
             .AddSquidexSerializers();
         }

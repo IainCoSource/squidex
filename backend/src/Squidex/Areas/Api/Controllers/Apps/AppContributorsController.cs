@@ -12,7 +12,7 @@ using Squidex.Areas.Api.Controllers.Apps.Models;
 using Squidex.Domain.Apps.Entities.Apps;
 using Squidex.Domain.Apps.Entities.Apps.Commands;
 using Squidex.Domain.Apps.Entities.Apps.Invitation;
-using Squidex.Domain.Apps.Entities.Apps.Services;
+using Squidex.Domain.Apps.Entities.Apps.Plans;
 using Squidex.Infrastructure.Commands;
 using Squidex.Shared;
 using Squidex.Shared.Users;
@@ -87,7 +87,7 @@ namespace Squidex.Areas.Api.Controllers.Apps
         }
 
         /// <summary>
-        /// Remove contributor from app.
+        /// Remove contributor.
         /// </summary>
         /// <param name="app">The name of the app.</param>
         /// <param name="id">The id of the contributor.</param>

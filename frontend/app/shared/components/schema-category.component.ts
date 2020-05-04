@@ -7,15 +7,7 @@
 
 import { CdkDragDrop } from '@angular/cdk/drag-drop';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges } from '@angular/core';
-
-import {
-    fadeAnimation,
-    LocalStoreService,
-    SchemaCategory,
-    SchemaDto,
-    SchemasState,
-    StatefulComponent
-} from '@app/shared/internal';
+import { fadeAnimation, LocalStoreService, SchemaCategory, SchemaDto, SchemasState, StatefulComponent } from '@app/shared/internal';
 
 interface State {
     // The filtered schemas.
@@ -88,7 +80,7 @@ export class SchemaCategoryComponent extends StatefulComponent<State> implements
 
     public schemaRoute(schema: SchemaDto) {
         if (schema.isSingleton && this.forContent) {
-            return [schema.name, schema.id];
+            return [schema.name, schema.id, 'history'];
         } else {
             return [schema.name];
         }

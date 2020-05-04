@@ -13,12 +13,12 @@ namespace Squidex.Infrastructure
 {
     public static class CollectionExtensions
     {
-        public static bool SetEquals<T>(this ICollection<T> source, ICollection<T> other)
+        public static bool SetEquals<T>(this IReadOnlyCollection<T> source, IReadOnlyCollection<T> other)
         {
             return source.Intersect(other).Count() == other.Count;
         }
 
-        public static bool SetEquals<T>(this ICollection<T> source, ICollection<T> other, IEqualityComparer<T> comparer)
+        public static bool SetEquals<T>(this IReadOnlyCollection<T> source, IReadOnlyCollection<T> other, IEqualityComparer<T> comparer)
         {
             return source.Intersect(other, comparer).Count() == other.Count;
         }
@@ -30,7 +30,7 @@ namespace Squidex.Infrastructure
 
         public static IEnumerable<T> SortList<T, TKey>(this IEnumerable<T> input, Func<T, TKey> idProvider, IReadOnlyList<TKey> ids) where T : class
         {
-            return ids.Select(id => input.FirstOrDefault(x => Equals(idProvider(x), id))).Where(x => x != null);
+            return ids.Select(id => input.FirstOrDefault(x => Equals(idProvider(x), id))).NotNull();
         }
 
         public static IEnumerable<T> Duplicates<T>(this IEnumerable<T> input)
@@ -78,6 +78,11 @@ namespace Squidex.Infrastructure
         public static IEnumerable<T> OrEmpty<T>(this IEnumerable<T>? source)
         {
             return source ?? Enumerable.Empty<T>();
+        }
+
+        public static IEnumerable<T> NotNull<T>(this IEnumerable<T?> source) where T : class
+        {
+            return source.Where(x => x != null)!;
         }
 
         public static IEnumerable<T> Concat<T>(this IEnumerable<T> source, T value)
@@ -261,7 +266,7 @@ namespace Squidex.Infrastructure
             }
         }
 
-        public sealed class KeyValuePairComparer<TKey, TValue> : IEqualityComparer<KeyValuePair<TKey, TValue>>
+        public sealed class KeyValuePairComparer<TKey, TValue> : IEqualityComparer<KeyValuePair<TKey, TValue>> where TKey : notnull
         {
             private readonly IEqualityComparer<TKey> keyComparer;
             private readonly IEqualityComparer<TValue> valueComparer;
@@ -279,7 +284,17 @@ namespace Squidex.Infrastructure
 
             public int GetHashCode(KeyValuePair<TKey, TValue> obj)
             {
-                return keyComparer.GetHashCode(obj.Key) ^ valueComparer.GetHashCode(obj.Value);
+                return keyComparer.GetHashCode(obj.Key) ^ ValueHashCode(obj);
+            }
+
+            private int ValueHashCode(KeyValuePair<TKey, TValue> obj)
+            {
+                if (Equals(obj.Value, null))
+                {
+                    return 0;
+                }
+
+                return valueComparer.GetHashCode(obj.Value);
             }
         }
     }

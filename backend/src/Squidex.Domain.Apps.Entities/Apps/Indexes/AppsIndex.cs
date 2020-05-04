@@ -80,7 +80,7 @@ namespace Squidex.Domain.Apps.Entities.Apps.Indexes
                     await Task.WhenAll(ids
                         .Select(GetAppAsync));
 
-                return apps.Where(x => x != null).ToList();
+                return apps.NotNull().ToList();
             }
         }
 
@@ -95,10 +95,10 @@ namespace Squidex.Domain.Apps.Entities.Apps.Indexes
 
                 var apps =
                     await Task.WhenAll(ids
-                        .SelectMany(x => x)
+                        .SelectMany(x => x).Distinct()
                         .Select(GetAppAsync));
 
-                return apps.Where(x => x != null).ToList();
+                return apps.NotNull().ToList();
             }
         }
 

@@ -17,7 +17,8 @@ namespace Squidex.Infrastructure.Assets
 {
     public sealed class MongoGridFsAssetStore : IAssetStore, IInitializable
     {
-        private const int BufferSize = 81920;
+        private static readonly GridFSDownloadOptions DownloadDefault = new GridFSDownloadOptions();
+        private static readonly GridFSDownloadOptions DownloadSeekable = new GridFSDownloadOptions { Seekable = true };
         private readonly IGridFSBucket<string> bucket;
 
         public MongoGridFsAssetStore(IGridFSBucket<string> bucket)
@@ -44,6 +45,20 @@ namespace Squidex.Infrastructure.Assets
             return null;
         }
 
+        public async Task<long> GetSizeAsync(string fileName, CancellationToken ct = default)
+        {
+            var name = GetFileName(fileName, nameof(fileName));
+
+            var file = await bucket.Find(Builders<GridFSFileInfo<string>>.Filter.Eq(x => x.Id, name)).FirstOrDefaultAsync();
+
+            if (file == null)
+            {
+                throw new AssetNotFoundException(fileName);
+            }
+
+            return file.Length;
+        }
+
         public async Task CopyAsync(string sourceFileName, string targetFileName, CancellationToken ct = default)
         {
             Guard.NotNullOrEmpty(targetFileName);
@@ -63,7 +78,7 @@ namespace Squidex.Infrastructure.Assets
             }
         }
 
-        public async Task DownloadAsync(string fileName, Stream stream, CancellationToken ct = default)
+        public async Task DownloadAsync(string fileName, Stream stream, BytesRange range, CancellationToken ct = default)
         {
             Guard.NotNull(stream);
 
@@ -71,9 +86,11 @@ namespace Squidex.Infrastructure.Assets
             {
                 var name = GetFileName(fileName, nameof(fileName));
 
-                using (var readStream = await bucket.OpenDownloadStreamAsync(name, cancellationToken: ct))
+                var options = range.IsDefined ? DownloadSeekable : DownloadDefault;
+
+                using (var readStream = await bucket.OpenDownloadStreamAsync(name, options, ct))
                 {
-                    await readStream.CopyToAsync(stream, BufferSize, ct);
+                    await readStream.CopyToAsync(stream, range, ct);
                 }
             }
             catch (GridFSFileNotFoundException ex)

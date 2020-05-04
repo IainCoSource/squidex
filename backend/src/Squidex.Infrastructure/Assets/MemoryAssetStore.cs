@@ -24,6 +24,21 @@ namespace Squidex.Infrastructure.Assets
             return null;
         }
 
+        public async Task<long> GetSizeAsync(string fileName, CancellationToken ct = default)
+        {
+            Guard.NotNullOrEmpty(fileName);
+
+            if (!streams.TryGetValue(fileName, out var sourceStream))
+            {
+                throw new AssetNotFoundException(fileName);
+            }
+
+            using (await readerLock.LockAsync())
+            {
+                return sourceStream.Length;
+            }
+        }
+
         public virtual async Task CopyAsync(string sourceFileName, string targetFileName, CancellationToken ct = default)
         {
             Guard.NotNullOrEmpty(sourceFileName);
@@ -40,7 +55,7 @@ namespace Squidex.Infrastructure.Assets
             }
         }
 
-        public virtual async Task DownloadAsync(string fileName, Stream stream, CancellationToken ct = default)
+        public virtual async Task DownloadAsync(string fileName, Stream stream, BytesRange range = default, CancellationToken ct = default)
         {
             Guard.NotNullOrEmpty(fileName);
             Guard.NotNull(stream);
@@ -54,7 +69,7 @@ namespace Squidex.Infrastructure.Assets
             {
                 try
                 {
-                    await sourceStream.CopyToAsync(stream, 81920, ct);
+                    await sourceStream.CopyToAsync(stream, range, ct);
                 }
                 finally
                 {
@@ -107,7 +122,7 @@ namespace Squidex.Infrastructure.Assets
 
             streams.TryRemove(fileName, out _);
 
-            return TaskHelper.Done;
+            return Task.CompletedTask;
         }
     }
 }

@@ -13,6 +13,8 @@ using MongoDB.Driver;
 using MongoDB.Driver.GridFS;
 using Squidex.Domain.Apps.Entities.Assets;
 using Squidex.Domain.Apps.Entities.Assets.Queries;
+using Squidex.Domain.Apps.Entities.History;
+using Squidex.Domain.Apps.Entities.Search;
 using Squidex.Infrastructure;
 using Squidex.Infrastructure.Assets;
 using Squidex.Infrastructure.Assets.ImageSharp;
@@ -28,6 +30,12 @@ namespace Squidex.Config.Domain
             services.Configure<AssetOptions>(
                 config.GetSection("assets"));
 
+            if (config.GetValue<bool>("assets:deleteRecursive"))
+            {
+                services.AddTransientAs<RecursiveDeleter>()
+                   .As<IEventConsumer>();
+            }
+
             services.AddTransientAs<AssetDomainObject>()
                 .AsSelf();
 
@@ -36,6 +44,12 @@ namespace Squidex.Config.Domain
 
             services.AddSingletonAs<AssetQueryParser>()
                 .AsSelf();
+
+            services.AddTransientAs<AssetHistoryEventsCreator>()
+                .As<IHistoryEventsCreator>();
+
+            services.AddSingletonAs<AssetsSearchSource>()
+                .As<ISearchSource>();
 
             services.AddSingletonAs<DefaultAssetFileStore>()
                 .As<IAssetFileStore>();

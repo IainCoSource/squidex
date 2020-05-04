@@ -41,7 +41,7 @@ namespace Squidex.Domain.Apps.Entities.Comments
 
         public CommentsGrainTests()
         {
-            A.CallTo(() => eventStore.AppendAsync(A<Guid>.Ignored, A<string>.Ignored, A<long>.Ignored, A<ICollection<EventData>>.Ignored))
+            A.CallTo(() => eventStore.AppendAsync(A<Guid>._, A<string>._, A<long>._, A<ICollection<EventData>>._))
                 .Invokes(x => LastEvents = sut.GetUncommittedEvents().Select(x => x.To<IEvent>()).ToList());
 
             sut = new CommentsGrain(eventStore, eventDataFormatter);
@@ -74,7 +74,7 @@ namespace Squidex.Domain.Apps.Entities.Comments
         }
 
         [Fact]
-        public async Task Update_should_create_events_and_update_state()
+        public async Task Update_should_create_events()
         {
             await ExecuteCreateAsync();
 
@@ -109,7 +109,7 @@ namespace Squidex.Domain.Apps.Entities.Comments
         }
 
         [Fact]
-        public async Task Delete_should_create_events_and_update_state()
+        public async Task Delete_should_create_events()
         {
             await ExecuteCreateAsync();
             await ExecuteUpdateAsync();

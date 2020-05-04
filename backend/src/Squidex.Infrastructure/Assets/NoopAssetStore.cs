@@ -19,12 +19,17 @@ namespace Squidex.Infrastructure.Assets
             return null;
         }
 
+        public Task<long> GetSizeAsync(string fileName, CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task CopyAsync(string sourceFileName, string fileName, CancellationToken ct = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task DownloadAsync(string fileName, Stream stream, CancellationToken ct = default)
+        public Task DownloadAsync(string fileName, Stream stream, BytesRange range = default, CancellationToken ct = default)
         {
             throw new NotSupportedException();
         }

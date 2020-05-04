@@ -5,39 +5,17 @@
  * Copyright (c) Squidex UG (haftungsbeschränkt). All rights reserved.
  */
 
-// tslint:disable:prefer-for-of
+// tslint:disable: max-line-length
+// tslint:disable: prefer-for-of
 
-import { FormArray, FormBuilder, FormControl, FormGroup, ValidatorFn, Validators } from '@angular/forms';
+import { FormArray, FormBuilder, FormGroup, ValidatorFn, Validators } from '@angular/forms';
+import { DateTime, Form, formControls, StringFormControl, Types, ValidatorsEx, value$ } from '@app/framework';
 import { BehaviorSubject } from 'rxjs';
-
-import {
-    DateTime,
-    Form,
-    formControls,
-    Types,
-    ValidatorsEx,
-    value$
-} from '@app/framework';
-
 import { AppLanguageDto } from './../services/app-languages.service';
 import { ContentDto, ContentReferencesValue } from './../services/contents.service';
 import { LanguageDto } from './../services/languages.service';
 import { FieldDto, RootFieldDto, SchemaDetailsDto, TableField } from './../services/schemas.service';
-import {
-    ArrayFieldPropertiesDto,
-    AssetsFieldPropertiesDto,
-    BooleanFieldPropertiesDto,
-    DateTimeFieldPropertiesDto,
-    fieldInvariant,
-    FieldPropertiesVisitor,
-    GeolocationFieldPropertiesDto,
-    JsonFieldPropertiesDto,
-    NumberFieldPropertiesDto,
-    ReferencesFieldPropertiesDto,
-    StringFieldPropertiesDto,
-    TagsFieldPropertiesDto,
-    UIFieldPropertiesDto
-} from './../services/schemas.types';
+import { ArrayFieldPropertiesDto, AssetsFieldPropertiesDto, BooleanFieldPropertiesDto, DateTimeFieldPropertiesDto, fieldInvariant, FieldPropertiesVisitor, GeolocationFieldPropertiesDto, JsonFieldPropertiesDto, NumberFieldPropertiesDto, ReferencesFieldPropertiesDto, StringFieldPropertiesDto, TagsFieldPropertiesDto, UIFieldPropertiesDto } from './../services/schemas.types';
 
 export class HtmlValue {
     constructor(
@@ -82,15 +60,19 @@ export function getContentValue(content: ContentDto, language: LanguageDto, fiel
 
             if (Types.isObject(fieldValue)) {
                 value = fieldValue[language.iso2Code];
-            } else if (Types.isString(fieldValue)) {
+            } else {
                 value = fieldValue;
             }
 
             let formatted: FieldValue = value!;
 
             if (value) {
-                if (Types.isString(value) && isAssets) {
-                    formatted = new HtmlValue(`<img src="${value}?width=50&height=50" />`);
+                if (isAssets && Types.isArray(value)) {
+                    if (value.length === 2) {
+                        formatted = new HtmlValue(`<img src="${value[0]}?width=50&height=50" /> ${value[1]}`);
+                    } else if (value.length === 1) {
+                        formatted = value[0];
+                    }
                 }
             } else {
                 value = formatted = '- No Value -';
@@ -100,7 +82,7 @@ export function getContentValue(content: ContentDto, language: LanguageDto, fiel
         }
     }
 
-    const contentField = content.dataDraft[field.name];
+    const contentField = content.data[field.name];
 
     if (contentField) {
         let value: any;
@@ -141,19 +123,11 @@ export class FieldFormatter implements FieldPropertiesVisitor<FieldValue> {
     }
 
     public visitArray(_: ArrayFieldPropertiesDto): string {
-        if (this.value.length) {
-            return `${this.value.length} Item(s)`;
-        } else {
-            return '0 Items';
-        }
+        return this.formatArray('Item', 'Items');
     }
 
     public visitAssets(_: AssetsFieldPropertiesDto): string {
-        if (this.value.length) {
-            return `${this.value.length} Asset(s)`;
-        } else {
-            return '0 Assets';
-        }
+        return this.formatArray('Asset', 'Assets');
     }
 
     public visitBoolean(_: BooleanFieldPropertiesDto): string {
@@ -162,12 +136,12 @@ export class FieldFormatter implements FieldPropertiesVisitor<FieldValue> {
 
     public visitDateTime(properties: DateTimeFieldPropertiesDto): FieldValue {
         try {
-            const parsed = DateTime.parseISO_UTC(this.value);
+            const parsed = DateTime.parseISO(this.value);
 
             if (properties.editor === 'Date') {
-                return parsed.toUTCStringFormat('YYYY-MM-DD');
+                return parsed.toStringFormatUTC('yyyy-MM-dd');
             } else {
-                return parsed.toUTCStringFormat('YYYY-MM-DD HH:mm:ss');
+                return parsed.toStringFormatUTC('yyyy-MM-dd HH:mm:ss');
             }
         } catch (ex) {
             return this.value;
@@ -200,11 +174,7 @@ export class FieldFormatter implements FieldPropertiesVisitor<FieldValue> {
     }
 
     public visitReferences(_: ReferencesFieldPropertiesDto): string {
-        if (this.value.length) {
-            return `${this.value.length} Reference(s)`;
-        } else {
-            return '0 References';
-        }
+        return this.formatArray('Reference', 'References');
     }
 
     public visitTags(_: TagsFieldPropertiesDto): string {
@@ -229,6 +199,18 @@ export class FieldFormatter implements FieldPropertiesVisitor<FieldValue> {
 
     public visitUI(_: UIFieldPropertiesDto): any {
         return '';
+    }
+
+    private formatArray(singularName: string, pluralName: string) {
+        if (Types.isArray(this.value)) {
+            if (this.value.length > 1) {
+                return `${this.value.length} ${pluralName}`;
+            } else if (this.value.length === 1) {
+                return `1 ${singularName}`;
+            }
+        }
+
+        return `0 ${pluralName}`;
     }
 }
 
@@ -383,9 +365,9 @@ export class FieldDefaultValue implements FieldPropertiesVisitor<any> {
         const now = this.now || DateTime.now();
 
         if (properties.calculatedDefaultValue === 'Now') {
-            return `${now.toUTCStringFormat('YYYY-MM-DDTHH:mm:ss')}Z`;
+            return `${now.toStringFormatUTC('yyyy-MM-dd\'T\'HH:mm:ss')}Z`;
         } else if (properties.calculatedDefaultValue === 'Today') {
-            return `${now.toUTCStringFormat('YYYY-MM-DD')}T00:00:00Z`;
+            return `${now.toISODate()}T00:00:00Z`;
         } else {
             return properties.defaultValue;
         }
@@ -483,11 +465,12 @@ export class EditContentForm extends Form<FormGroup, any> {
                 for (const { key, isOptional } of this.partitions.getAll(field)) {
                     const fieldValidators = FieldsValidators.create(field, isOptional);
 
-                    if (field.isArray) {
-                        fieldForm.setControl(key, new FormArray([], fieldValidators));
-                    } else {
-                        fieldForm.setControl(key, new FormControl(fieldDefault, fieldValidators));
-                    }
+                    const control =
+                        field.isArray ?
+                            new FormArray([], fieldValidators) :
+                            new StringFormControl(fieldDefault, fieldValidators);
+
+                    fieldForm.setControl(key, control);
                 }
 
                 this.form.setControl(field.name, fieldForm);
@@ -501,13 +484,13 @@ export class EditContentForm extends Form<FormGroup, any> {
     public hasChanged() {
         const currentValue = this.form.getRawValue();
 
-        return !Types.equals(this.initialData, currentValue);
+        return !Types.equals(this.initialData, currentValue, true);
     }
 
     public hasChanges(changes: any) {
         const currentValue = this.form.getRawValue();
 
-        return !Types.equals(changes, currentValue);
+        return !Types.equals(changes, currentValue, true);
     }
 
     public arrayItemRemove(field: RootFieldDto, language: AppLanguageDto, index: number) {
@@ -546,7 +529,7 @@ export class EditContentForm extends Form<FormGroup, any> {
                 }
 
                 const nestedValidators = FieldsValidators.create(nestedField, partition.isOptional);
-                const nestedForm = new FormControl(value, nestedValidators);
+                const nestedForm = new StringFormControl(value, nestedValidators);
 
                 if (nestedField.isDisabled) {
                     nestedForm.disable(NO_EMIT);
@@ -577,7 +560,7 @@ export class EditContentForm extends Form<FormGroup, any> {
                 const fieldForm = this.form.get(field.name) as FormGroup;
 
                 if (fieldForm) {
-                    const fieldValue = value ? value[field.name] || {} : {};
+                    const fieldValue = value?.[field.name] || {};
 
                     for (const partition of this.partitions.getAll(field)) {
                         const { key, isOptional } = partition;
@@ -673,7 +656,7 @@ export class PatchContentForm extends Form<FormGroup, any> {
         for (const field of this.editableFields) {
             const validators = FieldsValidators.create(field, this.language.isOptional);
 
-            this.form.setControl(field.name, new FormControl(undefined, validators));
+            this.form.setControl(field.name, new StringFormControl(undefined, validators));
         }
     }
 

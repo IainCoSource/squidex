@@ -7,15 +7,7 @@
 
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { inject, TestBed } from '@angular/core/testing';
-
-import {
-    ApiUrlConfig,
-    CommentDto,
-    CommentsDto,
-    CommentsService,
-    DateTime,
-    Version
-} from '@app/shared/internal';
+import { ApiUrlConfig, CommentDto, CommentsDto, CommentsService, DateTime, Version } from '@app/shared/internal';
 
 describe('CommentsService', () => {
     const user = 'me';
@@ -71,9 +63,9 @@ describe('CommentsService', () => {
         expect(comments!).toEqual(
             new CommentsDto(
                 [
-                    new CommentDto('123', DateTime.parseISO_UTC('2016-10-12T10:10'), 'text1', undefined, user)
+                    new CommentDto('123', DateTime.parseISO('2016-10-12T10:10Z'), 'text1', undefined, user)
                 ], [
-                    new CommentDto('456', DateTime.parseISO_UTC('2017-11-12T12:12'), 'text2', undefined, user)
+                    new CommentDto('456', DateTime.parseISO('2017-11-12T12:12Z'), 'text2', undefined, user)
                 ], [
                     '789'
                 ],
@@ -104,7 +96,7 @@ describe('CommentsService', () => {
             user: user
         });
 
-        expect(comment!).toEqual(new CommentDto('123', DateTime.parseISO_UTC('2016-10-12T10:10'), 'text1', undefined, user));
+        expect(comment!).toEqual(new CommentDto('123', DateTime.parseISO('2016-10-12T10:10Z'), 'text1', undefined, user));
     }));
 
     it('should make put request to replace comment content',

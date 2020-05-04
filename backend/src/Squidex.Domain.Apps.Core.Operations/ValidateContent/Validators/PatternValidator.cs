@@ -8,7 +8,7 @@
 using System;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Squidex.Infrastructure.Tasks;
+using Squidex.Infrastructure;
 
 namespace Squidex.Domain.Apps.Core.ValidateContent.Validators
 {
@@ -20,6 +20,8 @@ namespace Squidex.Domain.Apps.Core.ValidateContent.Validators
 
         public PatternValidator(string pattern, string? errorMessage = null)
         {
+            Guard.NotNullOrEmpty(pattern);
+
             this.errorMessage = errorMessage;
 
             regex = new Regex($"^{pattern}$", RegexOptions.None, Timeout);
@@ -52,7 +54,7 @@ namespace Squidex.Domain.Apps.Core.ValidateContent.Validators
                 }
             }
 
-            return TaskHelper.Done;
+            return Task.CompletedTask;
         }
     }
 }

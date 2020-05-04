@@ -173,8 +173,8 @@ export class AssetsFieldPropertiesDto extends FieldPropertiesDto {
     public readonly fieldType = 'Assets';
 
     public readonly allowDuplicates?: boolean;
-    public readonly resolveImage: boolean;
     public readonly allowedExtensions?: ReadonlyArray<string>;
+    public readonly resolveFirst: boolean;
     public readonly aspectHeight?: number;
     public readonly aspectWidth?: number;
     public readonly maxHeight?: number;
@@ -297,7 +297,7 @@ export class ReferencesFieldPropertiesDto extends FieldPropertiesDto {
     public readonly schemaIds?: ReadonlyArray<string>;
 
     public get singleId() {
-        return this.schemaIds && this.schemaIds.length === 1 ? this.schemaIds[0] : null;
+        return this.schemaIds?.[0] || null;
     }
 
     public get isSortable() {

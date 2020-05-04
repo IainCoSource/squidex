@@ -7,18 +7,9 @@
 
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
+import { AnalyticsService, ApiUrlConfig, HTTP, mapVersioned, pretifyError, Version, Versioned } from '@app/framework';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
-
-import {
-    AnalyticsService,
-    ApiUrlConfig,
-    HTTP,
-    mapVersioned,
-    pretifyError,
-    Version,
-    Versioned
-} from '@app/framework';
 
 export type PlansDto = Versioned<{
     readonly currentPlanId: string,
@@ -32,8 +23,10 @@ export class PlanDto {
         public readonly id: string,
         public readonly name: string,
         public readonly costs: string,
+        public readonly confirmText: string | undefined,
         public readonly yearlyId: string,
         public readonly yearlyCosts: string,
+        public readonly yearlyConfirmText: string | undefined,
         public readonly maxApiCalls: number,
         public readonly maxAssetSize: number,
         public readonly maxContributors: number
@@ -75,8 +68,10 @@ export class PlansService {
                             item.id,
                             item.name,
                             item.costs,
+                            item.confirmText,
                             item.yearlyId,
                             item.yearlyCosts,
+                            item.yearlyConfirmText,
                             item.maxApiCalls,
                             item.maxAssetSize,
                             item.maxContributors)),

@@ -9,24 +9,9 @@
 
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
+import { AnalyticsService, ApiUrlConfig, DateTime, hasAnyLink, HTTP, pretifyError, Resource, ResourceLinks, StringHelper, Types, Version, Versioned } from '@app/framework';
 import { Observable } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
-
-import {
-    AnalyticsService,
-    ApiUrlConfig,
-    DateTime,
-    hasAnyLink,
-    HTTP,
-    pretifyError,
-    Resource,
-    ResourceLinks,
-    StringHelper,
-    Types,
-    Version,
-    Versioned
-} from '@app/framework';
-
 import { createProperties, FieldPropertiesDto } from './schemas.types';
 
 export type SchemasDto = {
@@ -55,6 +40,9 @@ export class SchemaDto {
     public readonly _links: ResourceLinks;
 
     public readonly canAddField: boolean;
+    public readonly canContentsRead: boolean;
+    public readonly canContentsCreate: boolean;
+    public readonly canContentsCreateAndPublish: boolean;
     public readonly canDelete: boolean;
     public readonly canOrderFields: boolean;
     public readonly canPublish: boolean;
@@ -85,6 +73,9 @@ export class SchemaDto {
         this._links = links;
 
         this.canAddField = hasAnyLink(links, 'fields/add');
+        this.canContentsRead = hasAnyLink(links, 'contents');
+        this.canContentsCreate = hasAnyLink(links, 'contents/create');
+        this.canContentsCreateAndPublish = hasAnyLink(links, 'contents/create/publish');
         this.canDelete = hasAnyLink(links, 'delete');
         this.canOrderFields = hasAnyLink(links, 'fields/order');
         this.canPublish = hasAnyLink(links, 'publish');
@@ -159,7 +150,12 @@ export class SchemaDetailsDto extends SchemaDto {
     }
 
     public export(): any {
-        const fieldKeys = ['fieldId', '_links', 'parentFieldId'];
+        const fieldKeys = [
+            'fieldId',
+            'parentId',
+            'parentFieldId',
+            '_links'
+        ];
 
         const cleanup = (source: any, ...exclude: string[]): any => {
             const clone = {};
@@ -682,8 +678,8 @@ function parseSchemas(response: any) {
             new SchemaPropertiesDto(item.properties.label, item.properties.hints, item.properties.tags),
             item.isSingleton,
             item.isPublished,
-            DateTime.parseISO_UTC(item.created), item.createdBy,
-            DateTime.parseISO_UTC(item.lastModified), item.lastModifiedBy,
+            DateTime.parseISO(item.created), item.createdBy,
+            DateTime.parseISO(item.lastModified), item.lastModifiedBy,
             new Version(item.version.toString())));
 
     const _links = response._links;
@@ -703,8 +699,8 @@ function parseSchemaWithDetails(response: any) {
         properties,
         response.isSingleton,
         response.isPublished,
-        DateTime.parseISO_UTC(response.created), response.createdBy,
-        DateTime.parseISO_UTC(response.lastModified), response.lastModifiedBy,
+        DateTime.parseISO(response.created), response.createdBy,
+        DateTime.parseISO(response.lastModified), response.lastModifiedBy,
         new Version(response.version.toString()),
         fields,
         response.fieldsInLists,
