@@ -24,8 +24,8 @@ namespace Squidex.Domain.Apps.Entities.Contents
 
         public DynamicContentWorkflow(IScriptEngine scriptEngine, IAppProvider appProvider)
         {
-            Guard.NotNull(scriptEngine);
-            Guard.NotNull(appProvider);
+            Guard.NotNull(scriptEngine, nameof(scriptEngine));
+            Guard.NotNull(appProvider, nameof(appProvider));
 
             this.scriptEngine = scriptEngine;
 
@@ -115,7 +115,7 @@ namespace Squidex.Domain.Apps.Entities.Contents
 
             if (!string.IsNullOrWhiteSpace(condition?.Expression))
             {
-                var context = new ScriptContext
+                var context = new ScriptVars
                 {
                     ["data"] = data
                 };

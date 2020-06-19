@@ -19,7 +19,7 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries.Steps
 
         public ScriptContent(IScriptEngine scriptEngine)
         {
-            Guard.NotNull(scriptEngine);
+            Guard.NotNull(scriptEngine, nameof(scriptEngine));
 
             this.scriptEngine = scriptEngine;
         }
@@ -46,7 +46,7 @@ namespace Squidex.Domain.Apps.Entities.Contents.Queries.Steps
 
         private async Task TransformAsync(Context context, string script, ContentEntity content)
         {
-            var scriptContext = new ScriptContext
+            var scriptContext = new ScriptVars
             {
                 ContentId = content.Id,
                 Data = content.Data,

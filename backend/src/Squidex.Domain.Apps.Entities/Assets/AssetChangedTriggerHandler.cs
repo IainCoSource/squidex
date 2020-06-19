@@ -24,8 +24,8 @@ namespace Squidex.Domain.Apps.Entities.Assets
 
         public AssetChangedTriggerHandler(IScriptEngine scriptEngine, IAssetLoader assetLoader)
         {
-            Guard.NotNull(scriptEngine);
-            Guard.NotNull(assetLoader);
+            Guard.NotNull(scriptEngine, nameof(scriptEngine));
+            Guard.NotNull(assetLoader, nameof(assetLoader));
 
             this.scriptEngine = scriptEngine;
 
@@ -75,7 +75,7 @@ namespace Squidex.Domain.Apps.Entities.Assets
                 return true;
             }
 
-            var context = new ScriptContext
+            var context = new ScriptVars
             {
                 ["event"] = @event
             };

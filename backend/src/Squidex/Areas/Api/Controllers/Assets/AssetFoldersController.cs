@@ -51,14 +51,17 @@ namespace Squidex.Areas.Api.Controllers.Assets
         [ApiCosts(1)]
         public async Task<IActionResult> GetAssetFolders(string app, [FromQuery] Guid parentId)
         {
-            var assetFolders = await assetQuery.QueryAssetFoldersAsync(Context, parentId);
+            var assetFolders = assetQuery.QueryAssetFoldersAsync(Context, parentId);
+            var assetPath = assetQuery.FindAssetFolderAsync(parentId);
+
+            await Task.WhenAll(assetFolders, assetPath);
 
             var response = Deferred.Response(() =>
             {
-                return AssetFoldersDto.FromAssets(assetFolders, this, app);
+                return AssetFoldersDto.FromAssets(assetFolders.Result, assetPath.Result, Resources);
             });
 
-            Response.Headers[HeaderNames.ETag] = assetFolders.ToEtag();
+            Response.Headers[HeaderNames.ETag] = assetFolders.Result.ToEtag();
 
             return Ok(response);
         }
@@ -162,7 +165,7 @@ namespace Squidex.Areas.Api.Controllers.Assets
         {
             var context = await CommandBus.PublishAsync(command);
 
-            return AssetFolderDto.FromAssetFolder(context.Result<IAssetFolderEntity>(), this, app);
+            return AssetFolderDto.FromAssetFolder(context.Result<IAssetFolderEntity>(), Resources);
         }
     }
 }

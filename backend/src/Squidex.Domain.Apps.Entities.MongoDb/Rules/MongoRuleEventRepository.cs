@@ -90,9 +90,9 @@ namespace Squidex.Domain.Apps.Entities.MongoDb.Rules
             return Collection.UpdateOneAsync(x => x.Id == id, Update.Set(x => x.NextAttempt, nextAttempt));
         }
 
-        public async Task EnqueueAsync(RuleJob job, Instant nextAttempt, CancellationToken ct = default)
+        public async Task EnqueueAsync(RuleJob job, Instant? nextAttempt, CancellationToken ct = default)
         {
-            var entity = SimpleMapper.Map(job, new MongoRuleEventEntity { Job = job, Created = nextAttempt, NextAttempt = nextAttempt });
+            var entity = SimpleMapper.Map(job, new MongoRuleEventEntity { Job = job, Created = job.Created, NextAttempt = nextAttempt });
 
             await Collection.InsertOneIfNotExistsAsync(entity, ct);
         }
@@ -107,8 +107,8 @@ namespace Squidex.Domain.Apps.Entities.MongoDb.Rules
 
         public async Task UpdateAsync(RuleJob job, RuleJobUpdate update)
         {
-            Guard.NotNull(job);
-            Guard.NotNull(update);
+            Guard.NotNull(job, nameof(job));
+            Guard.NotNull(update, nameof(update));
 
             if (update.ExecutionResult == RuleResult.Success)
             {

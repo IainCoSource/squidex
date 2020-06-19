@@ -26,11 +26,10 @@ namespace Squidex.Domain.Apps.Entities.Contents
 
         public ContentChangedTriggerHandler(IScriptEngine scriptEngine, IContentLoader contentLoader)
         {
-            Guard.NotNull(scriptEngine);
-            Guard.NotNull(contentLoader);
+            Guard.NotNull(scriptEngine, nameof(scriptEngine));
+            Guard.NotNull(contentLoader, nameof(contentLoader));
 
             this.scriptEngine = scriptEngine;
-
             this.contentLoader = contentLoader;
         }
 
@@ -145,7 +144,7 @@ namespace Squidex.Domain.Apps.Entities.Contents
                 return true;
             }
 
-            var context = new ScriptContext
+            var context = new ScriptVars
             {
                 ["event"] = @event
             };
