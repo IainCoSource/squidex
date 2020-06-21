@@ -163,8 +163,14 @@ namespace Squidex.Domain.Apps.Entities.Backup
                         foreach (var handler in handlers)
                         {
                             ct.ThrowIfCancellationRequested();
-
-                            await handler.BackupAsync(context);
+                            try
+                            {
+                                await handler.BackupAsync(context);
+                            }
+                            catch ( Exception e )
+                            {
+                               //
+                            }
                         }
 
                         foreach (var handler in handlers)

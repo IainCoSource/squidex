@@ -66,6 +66,7 @@ namespace Squidex.Areas.Api.Controllers.Assets
         /// 404 => Asset or app not found.
         /// </returns>
         [HttpGet]
+        [HttpHead]
         [Route("assets/{app}/{idOrSlug}/{*more}")]
         [ProducesResponseType(typeof(FileResult), 200)]
         [ApiPermission]
@@ -84,7 +85,16 @@ namespace Squidex.Areas.Api.Controllers.Assets
                 asset = await assetRepository.FindAssetBySlugAsync(App.Id, idOrSlug);
             }
 
-            return await DeliverAssetAsync(asset, query);
+            if (Request.Method.Equals("HEAD"))
+            {
+                Response.ContentLength = asset.FileVersion;
+                Response.Headers.Add( "Digest", asset.FileHash );
+                return Ok();
+            }
+            else
+            {
+                return await DeliverAssetAsync( asset, query );
+            }
         }
 
         /// <summary>

@@ -65,6 +65,7 @@ namespace Squidex.Infrastructure.Assets
             }
             catch (FileNotFoundException ex)
             {
+                System.Console.WriteLine($"File: {fileName} not found");
                 throw new AssetNotFoundException(fileName, ex);
             }
         }
@@ -86,6 +87,7 @@ namespace Squidex.Infrastructure.Assets
             }
             catch (FileNotFoundException ex)
             {
+                System.Console.WriteLine($"File: {sourceFileName} not found");
                 throw new AssetNotFoundException(sourceFileName, ex);
             }
         }
@@ -105,6 +107,7 @@ namespace Squidex.Infrastructure.Assets
             }
             catch (FileNotFoundException ex)
             {
+                System.Console.WriteLine($"File: {fileName} not found");
                 throw new AssetNotFoundException(fileName, ex);
             }
         }
